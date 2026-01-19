@@ -1,0 +1,41 @@
+"weapon_id","name","type","internal_name","cost","inventory_name"
+26,ak47,,ak47,2700,AK-47
+80,aug,,aug,3300,AUG
+29,awp,,awp,4750,AWP
+69,bizon,,bizon,1400,PP-Bizon
+25,deagle,,deagle,700,Desert Eagle
+86,defuse,,defuse,400,Defuse Kit
+83,elite,,elite,0,elite
+70,famas,,famas,1800,FAMAS
+68,fiveseven,,fiveseven,500,Five-Seven
+38,flashbang,,flashbang,200,Flashbang
+28,galilar,,galilar,1800,Galil AR
+22,glock,,glock,0,Glock-18
+35,hegrenade,,hegrenade,300,High Explosive Greande
+21,hkp2000,,hkp2000,0,P2000
+36,inferno,,inferno,500,Incendiary Grenade
+84,kevlar,,kevlar,650,Kevlar Vest
+85,kevlar_helmet,,kevlar_helmet,1000,Kevlar Vest + Helmet
+79,knife,,knife,0,knife
+77,knife_t,,knife_t,0,knife_t
+82,m249,,m249,5200,M249
+31,m4a1,,m4a1,2900,M4A4
+24,m4a1_silencer,,m4a1_silencer,3000,M4A1-S
+30,mac10,,mac10,1050,MAC-10
+39,mag7,,mag7,1300,MAG-7
+37,molotov,,molotov,400,Molotov
+72,mp5sd,,mp5sd,1500,MP5-SD
+40,mp7,,mp7,1500,MP7
+27,mp9,,mp9,1250,MP9
+33,p250,,p250,300,P250
+81,p90,,xm1014,2350,P90
+73,revolver,,revolver,600,R8 Revolver
+71,sg556,,sg556,300,SG 553
+78,smokegrenade,,smokegrenade,300,Smoke Grenade
+74,ssg08,,ssg08,1700,SSG 08
+32,tec9,,tec9,500,Tec-9
+34,ump45,,ump45,1200,UMP-45
+0,unknown,,unknown,0,unknown
+23,usp_silencer,,usp_silencer,0,USP-S
+75,world,,world,0,world
+76,xm1014,,xm1014,2000,XM1014

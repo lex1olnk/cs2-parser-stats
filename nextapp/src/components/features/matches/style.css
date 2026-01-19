@@ -1,0 +1,198 @@
+
+.controls-section {
+  padding: 4px;
+  margin-right: 16px;
+}
+
+.controls-section h4 {
+  padding-bottom: 4px;
+}
+
+.sort-controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.btn-group {
+  padding: 4px;
+  overflow: hidden;
+  display: flex;
+  align-items: end;
+}
+
+.btn {
+  padding: 4px 16px;
+  border-radius: 4px;
+  margin: 0 4px;
+  background-color: var(--light-dark);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn:hover {
+  background-color: #374151;
+}
+
+.btn-active {
+  background-color: #3b82f6;
+  color: white;
+}
+
+.btn:not(:last-child) {
+  border-right: 1px solid #4b5563;
+}
+
+select {
+  background: #3a3a3a;
+  color: white;
+  border: 1px solid #4a4a4a;
+  padding: 0.5rem;
+  border-radius: 4px;
+  flex-grow: 1;
+}
+
+.direction-toggle {
+  background: #20c997;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  color: white;
+  transition: opacity 0.2s;
+}
+
+.direction-toggle:hover {
+  opacity: 0.9;
+}
+
+.range-controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.range-controls input {
+  background: #3a3a3a;
+  color: white;
+  border: 1px solid #4a4a4a;
+  padding: 4px 8px;
+  border-radius: 4px;
+  width: 70px;
+}
+
+.reset-button:hover {
+  opacity: 0.9;
+}
+
+.players-stats-container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.stats-table-wrapper {
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  width: 100%;
+}
+
+/* Grid контейнер для всей таблицы */
+.stats-grid {
+  display: grid;
+  grid-template-columns: 90px auto repeat(16, 52.5px);
+}
+
+/* Заголовки */
+.grid-header {
+  background-color: var(--light-dark);
+  padding: 8px 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #fff;
+  position: sticky;
+  top: 0;
+  border-bottom: 8px solid var(--color-background);
+}
+
+.grid-header:hover > .grid-header {
+  background-color: #494949;
+}
+/* Особый стиль для заголовка nickname */
+.grid-header:first-child {
+  text-align: center;
+}
+
+/* Строки таблицы */
+.grid-row {
+  display: contents;
+}
+
+.grid-row:hover > .grid-item {
+  background-color: #494949;
+}
+
+/* Ячейки таблицы */
+.grid-item {
+  padding: 6px 12px;
+  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 400;
+  color: #fff;
+  display: flex;
+  text-align: left;
+  align-items: center;
+  background-color: var(--light-dark);
+  transition: background-color 0.2s;
+}
+
+/* Первая колонка (nickname) */
+
+.grid-item:first-child {
+  text-align: center;
+  left: 0;
+  z-index: 1;
+}
+.rating {
+  font-weight: 600;
+  color: #20c997;
+}
+
+.loading,
+.error {
+  text-align: center;
+  padding: 40px;
+  font-size: 18px;
+  grid-column: 1 / -1;
+}
+
+.error {
+  color: #dc3545;
+}
+
+@media (max-width: 768px) {
+  .players-stats-container {
+    padding: 10px;
+  }
+
+  .stats-grid {
+    min-width: auto;
+    grid-template-columns: minmax(120px, 1fr) repeat(
+        auto-fit,
+        minmax(60px, 1fr)
+      );
+  }
+
+  .grid-header,
+  .grid-item {
+    padding: 8px 10px;
+    font-size: 0.9em;
+  }
+
+  .grid-item:first-child {
+    min-width: 120px;
+    padding-left: 15px;
+  }
+}

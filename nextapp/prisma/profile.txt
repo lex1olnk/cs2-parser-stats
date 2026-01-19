@@ -1,0 +1,4 @@
+COPY profile(name, faceit_link)
+FROM 'C:/data-1759713801392.csv'
+DELIMITER ','
+CSV HEADER;

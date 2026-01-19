@@ -1,0 +1,436 @@
+generator client {
+  provider   = "prisma-client"
+  output     = "./generated"
+  engineType = "client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model ProcessingSession {
+  id               String   @id @default(cuid())
+  sessionId        String   @unique
+  status           String
+  totalMatches     Int
+  processedMatches Int
+  matches          Json
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("processing_sessions")
+}
+
+model Tournament {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  status    String // "upcoming", "ongoing", "completed"
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  mvpId     Int?     @map("mvp_user_id")
+
+  // Relations
+  participants TournamentParticipant[]
+  teams        TournamentTeam[]
+  matches      Match[]
+  mvp          Profile?                @relation(fields: [mvpId], references: [id])
+
+  @@map("tournament")
+}
+
+model TournamentTeam {
+  id           String @id @default(uuid()) @db.Uuid
+  name         String
+  seed         Int?
+  tournamentId String @map("tournament_id") @db.Uuid
+  captainId    Int    @map("captain_id")
+
+  // Relations
+  tournament   Tournament              @relation(fields: [tournamentId], references: [id])
+  captain      Profile                 @relation(fields: [captainId], references: [id])
+  participants TournamentParticipant[]
+
+  @@map("tournament_team")
+}
+
+model TournamentParticipant {
+  id               String  @id @default(uuid()) @db.Uuid
+  profileId        Int     @map("profile_id")
+  draftOrder       Int     @map("draft_order")
+  tournamentId     String  @map("tournament_id") @db.Uuid
+  tournamentTeamId String? @map("tournament_team_id") @db.Uuid
+
+  // Relations
+  profile    Profile         @relation(fields: [profileId], references: [id])
+  tournament Tournament      @relation(fields: [tournamentId], references: [id])
+  team       TournamentTeam? @relation(fields: [tournamentTeamId], references: [id])
+
+  @@unique([profileId, tournamentId])
+  @@map("tournament_participant")
+}
+
+model Match {
+  id               String   @id @default(uuid()) @db.Uuid
+  type             String
+  status           String
+  demoPath         String   @unique
+  bestOf           Int      @map("best_of")
+  hasWinner        Boolean  @map("has_winner")
+  startedAt        DateTime @map("started_at")
+  finishedAt       DateTime @map("finished_at")
+  maxRoundsCount   Int      @map("max_rounds_count")
+  serverInstanceId String   @map("server_instance_id")
+  isFinal          Boolean  @default(false) @map("is_final")
+  tournamentId     String?  @map("tournament_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  // Relations
+  tournament Tournament?          @relation(fields: [tournamentId], references: [id])
+  rounds     Round[]
+  maps       MatchMap[]
+  teams      MatchTeam[]
+  members    MatchMember[]
+  kills      MatchKill[]
+  damages    MatchDamage[]
+  clutches   MatchClutch[]
+  grenades   MatchGrenade[]
+  
+  // Новые Relations
+  blinds     MatchBlind[]
+  economies  MatchPlayerEconomy[]
+
+  @@map("match")
+}
+
+model MatchMap {
+  id         String   @id @default(uuid()) @db.Uuid
+  number     Int
+  mapId      Int      @map("map_id")
+  startedAt  DateTime @map("started_at")
+  finishedAt DateTime @map("finished_at")
+  gameStatus String   @map("game_status")
+  matchId    String   @map("match_id") @db.Uuid
+
+  // Relations
+  match     Match              @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  map       Map                @relation(fields: [mapId], references: [id])
+  rounds    Round[]
+  teamStats MatchTeamMapStat[]
+
+  @@map("match_map")
+}
+
+model Map {
+  id      Int    @id @default(autoincrement())
+  name    String
+  preview String
+  topview String
+
+  // Relations
+  matchMaps MatchMap[]
+
+  @@map("map")
+}
+
+model MatchTeam {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  size      Int
+  score     Int
+  teamNum   Int?     @map("team_num")
+  isWinner  Boolean  @map("is_winner")
+  captainId Int      @map("captain_id")
+  matchId   String   @map("match_id") @db.Uuid
+
+  // Relations
+  match    Match              @relation(fields: [matchId], references: [id])
+  members  MatchMember[]
+  mapStats MatchTeamMapStat[]
+
+  @@map("match_team")
+}
+
+model MatchTeamMapStat {
+  score         Int
+  isWinner      Boolean @map("is_winner")
+  initialSide   String  @map("initial_side")
+  matchMapId    String  @map("match_map_id") @db.Uuid
+  matchTeamId   String  @map("match_team_id") @db.Uuid
+
+  // Relations
+  matchMap  MatchMap  @relation(fields: [matchMapId], references: [id])
+  matchTeam MatchTeam @relation(fields: [matchTeamId], references: [id])
+
+  @@id([matchMapId, matchTeamId])
+  @@map("match_team_map_stat")
+}
+
+model MatchMember {
+  hash        String  @id
+  role        String
+  ready       Boolean
+  impact      Float?
+  connected   Boolean
+  isLeaver    Boolean @map("is_leaver")
+  matchId     String? @map("match_id") @db.Uuid
+  matchTeamId String? @map("match_team_id") @db.Uuid
+  userId      Int?    @map("user_id")
+
+  // Relations
+  match     Match?     @relation(fields: [matchId], references: [id])
+  matchTeam MatchTeam? @relation(fields: [matchTeamId], references: [id])
+  user      User?      @relation(fields: [userId], references: [id])
+
+  @@map("match_member")
+}
+
+model User {
+  id        Int     @id @default(autoincrement())
+  nickname  String  @map("nickname")
+  avatar    String?
+  profileId Int?    @map("profile_id")
+  steamId   String  @unique @map("steam_id")
+
+  // Relations
+  profile            Profile?             @relation(fields: [profileId], references: [id])
+  matchClutch        MatchClutch[]
+  matchMembers       MatchMember[]
+  grenades           MatchGrenade[]
+  matchInventories   MatchInventory[]
+  
+  // Stats relations
+  killsAsKiller      MatchKill[]          @relation("KillerKills")
+  killsAsVictim      MatchKill[]          @relation("VictimKills")
+  killsAsAssistant   MatchKill[]          @relation("AssistantKills")
+  damagesAsInflictor MatchDamage[]        @relation("InflictorDamages")
+  damagesAsVictim    MatchDamage[]        @relation("VictimDamages")
+  
+  // New Relations
+  blindsAsAttacker   MatchBlind[]         @relation("AttackerBlinds")
+  blindsAsVictim     MatchBlind[]         @relation("VictimBlinds")
+  economies          MatchPlayerEconomy[]
+
+  @@map("user")
+}
+
+model Profile {
+  id    Int     @id @default(autoincrement())
+  name  String  @unique
+  email String? @unique
+
+  // Relations
+  users                 User[]
+  tournament            Tournament[]
+  tournamentTeam        TournamentTeam[]
+  tournamentParticipant TournamentParticipant[]
+
+  @@map("profile")
+}
+
+model Round {
+  id             String   @id @default(uuid()) @db.Uuid
+  winReason      String   @map("win_reason")
+  startedAt      DateTime @map("started_at")
+  finishedAt     DateTime @map("finished_at")
+  winMatchTeamId String   @map("win_match_team_id") @db.Uuid
+  winTeamNum     Int      @map("win_team_num")
+  matchId        String   @map("match_id") @db.Uuid
+  matchMapId     String   @map("match_map_id") @db.Uuid
+  roundNumber    Int      @map("round_number")
+  endReason      Int?     @map("end_reason")
+  tick           Float
+
+  // Relations
+  match            Match                @relation(fields: [matchId], references: [id])
+  matchMap         MatchMap             @relation(fields: [matchMapId], references: [id])
+  kills            MatchKill[]
+  damages          MatchDamage[]
+  clutches         MatchClutch[]
+  grenades         MatchGrenade[]
+  matchInventories MatchInventory[]
+  
+  // New Relations
+  blinds           MatchBlind[]
+  economies        MatchPlayerEconomy[]
+
+  @@map("round")
+}
+
+model MatchKill {
+  id               String   @id @default(uuid()) @db.Uuid
+  createdAt        DateTime @map("created_at")
+  killerId         Int?     @map("killer_id")
+  victimId         Int      @map("victim_id")
+  assistantId      Int?     @map("assistant_id")
+  weaponId         Int?     @map("weapon_id")
+  isWallbang       Boolean  @map("is_wallbang")
+  isHeadshot       Boolean  @map("is_headshot")
+  isTeamkill       Boolean  @map("is_teamkill")
+  isAirshot        Boolean  @map("is_airshot")
+  isNoscope        Boolean  @map("is_noscope")
+  isThroughSmoke   Boolean  @map("is_through_smoke")
+  isScoreboardKill Boolean  @default(true) @map("is_scoreboard_kill")
+  distance         Float
+  matchId          String   @map("match_id") @db.Uuid
+  roundId          String   @map("round_id") @db.Uuid
+  killerTeam       Int      @map("killer_team")
+  roundTime        Int      @map("round_time")
+  killerPositionX  Float    @map("killer_position_x")
+  killerPositionY  Float    @map("killer_position_y")
+  victimPositionX  Float    @map("victim_position_x")
+  victimPositionY  Float    @map("victim_position_y")
+  tick             Float?
+
+  // Relations
+  match     Match   @relation(fields: [matchId], references: [id])
+  round     Round   @relation(fields: [roundId], references: [id])
+  weapon    Weapon? @relation(fields: [weaponId], references: [id])
+  killer    User?   @relation("KillerKills", fields: [killerId], references: [id])
+  victim    User    @relation("VictimKills", fields: [victimId], references: [id])
+  assistant User?   @relation("AssistantKills", fields: [assistantId], references: [id])
+
+  @@map("match_kill")
+}
+
+model MatchInventory {
+  id       String @id @default(uuid()) @db.Uuid
+  userId   Int    @map("user_id")
+  weaponId Int    @map("weapon_id")
+  roundId  String @map("round_id") @db.Uuid
+  
+  // Новая связь: связываем инвентарь с экономическим snapshot'ом
+  economySnapshotId String @map("economy_snapshot_id") @db.Uuid
+  economySnapshot   MatchPlayerEconomy @relation(fields: [economySnapshotId], references: [id])
+
+  // Relations
+  user   User   @relation(fields: [userId], references: [id])
+  weapon Weapon @relation(fields: [weaponId], references: [id])
+  round  Round  @relation(fields: [roundId], references: [id])
+
+  @@map("match_inventory")
+}
+
+model MatchDamage {
+  id               String  @id @default(uuid()) @db.Uuid
+  inflictorId      Int     @map("inflictor_id")
+  victimId         Int     @map("victim_id")
+  inflictorTeam    Int     @map("inflictor_team")
+  weaponId         Int     @map("weapon_id")
+  hitboxGroup      String  @map("hitbox_group")
+  damageReal       Int     @map("damage_real")
+  damageNormalized Int     @map("damage_normalized")
+  hits             Int
+  matchId          String  @map("match_id") @db.Uuid
+  roundId          String  @map("round_id") @db.Uuid
+  tick             Float?
+
+  // Relations
+  match     Match  @relation(fields: [matchId], references: [id])
+  round     Round  @relation(fields: [roundId], references: [id])
+  weapon    Weapon @relation(fields: [weaponId], references: [id])
+  inflictor User?  @relation("InflictorDamages", fields: [inflictorId], references: [id])
+  victim    User?  @relation("VictimDamages", fields: [victimId], references: [id])
+
+  @@map("match_damage")
+}
+
+model MatchClutch {
+  userId    Int      @map("user_id")
+  createdAt DateTime @map("created_at")
+  success   Boolean
+  amount    Int
+  matchId   String   @map("match_id") @db.Uuid
+  roundId   String   @map("round_id") @db.Uuid
+
+  // Relations
+  match Match @relation(fields: [matchId], references: [id])
+  round Round @relation(fields: [roundId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@id([userId, roundId])
+  @@map("match_clutch")
+}
+
+model MatchGrenade {
+  id                String  @id @default(uuid()) @db.Uuid
+  entityId          Int     @map("entity_id")
+  userId            Int     @map("user_id")
+  matchId           String  @map("match_id") @db.Uuid
+  roundId           String  @map("round_id") @db.Uuid
+  grenadeType       Int     @map("grenade_type")
+  throwPositionX    Float?  @map("throw_position_x")
+  throwPositionY    Float?  @map("throw_position_y")
+  throwPositionZ    Float?  @map("throw_position_z")
+  detonatePositionX Float?  @map("detonate_position_x")
+  detonatePositionY Float?  @map("detonate_position_y")
+  detonatePositionZ Float?  @map("detonate_position_z")
+  roundTime         Int     @map("round_time")
+  tick              Float?
+
+  // Relations
+  user  User  @relation(fields: [userId], references: [id])
+  match Match @relation(fields: [matchId], references: [id])
+  round Round @relation(fields: [roundId], references: [id])
+
+  @@map("match_grenade")
+}
+
+model Weapon {
+  id            Int     @id @default(autoincrement()) @map("weapon_id")
+  name          String  @unique
+  type          String?
+  internalName  String  @map("internal_name")
+  inventoryName String  @map("inventory_name")
+  cost          Int
+
+  // Relations
+  matchKill        MatchKill[]
+  matchDamage      MatchDamage[]
+  matchInventories MatchInventory[]
+
+  @@map("weapon")
+}
+
+// --- НОВЫЕ МОДЕЛИ ---
+
+model MatchBlind {
+  id            String   @id @default(uuid()) @db.Uuid
+  duration      Float
+  tick          Float?
+  
+  // Foreign Keys
+  attackerId    Int?     @map("attacker_id")
+  victimId      Int?     @map("victim_id")
+  matchId       String   @map("match_id") @db.Uuid
+  roundId       String   @map("round_id") @db.Uuid
+
+  // Relations
+  attacker      User?    @relation("AttackerBlinds", fields: [attackerId], references: [id])
+  victim        User?    @relation("VictimBlinds", fields: [victimId], references: [id])
+  match         Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  round         Round    @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  @@map("match_blind")
+}
+
+model MatchPlayerEconomy {
+  id            String   @id @default(uuid()) @db.Uuid
+  startMoney    Int      @map("start_money") 
+  teamNum       Int      @map("team_num")    
+  tick          Float?   
+  
+  // Foreign Keys
+  userId        Int      @map("user_id")
+  matchId       String   @map("match_id") @db.Uuid
+  roundId       String   @map("round_id") @db.Uuid
+  
+  // Relations
+  user          User     @relation(fields: [userId], references: [id])
+  match         Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  round         Round    @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  // Новая связь: экономическая запись является родительской для инвентаря
+  inventories   MatchInventory[]
+
+  @@unique([userId, roundId])
+  @@map("match_player_economy")
+}
