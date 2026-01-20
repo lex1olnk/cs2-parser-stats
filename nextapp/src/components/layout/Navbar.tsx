@@ -1,7 +1,13 @@
+"use client";
+
 import Link from "next/link";
 import Image from "next/image";
+import { useSearchParams } from "next/navigation";
 
 export function Navbar() {
+  const searchParams = useSearchParams();
+  const currentTournament = searchParams.get("tournament") || "PGL_2024";
+
   return (
     /* Контейнер-обертка, который всегда прижат к верху */
     <div className="fixed top-0 left-0 w-full z-100 group">
@@ -41,7 +47,7 @@ export function Navbar() {
             {/* Правая часть */}
             <div className="flex items-center space-x-2">
               <Link
-                href="/matches"
+                href={`/tournament/players?tournament=${currentTournament}`}
                 className="relative overflow-hidden px-6 py-1.5 text-[11px] font-black uppercase tracking-[0.2em] text-white border border-zinc-800 hover:border-white transition-colors group/btn"
               >
                 <span className="relative z-10">Топ_15</span>
