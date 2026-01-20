@@ -46,7 +46,7 @@ export const HeroSection = () => {
         key={currentId}
         initial={{ opacity: 0, x: 20 }}
         animate={{ opacity: 1, x: 0 }}
-        className="absolute bottom-10 right-10 text-[15vw] font-black text-white/[0.03] pointer-events-none uppercase italic leading-none"
+        className="absolute bottom-10 right-10 text-[15vw] font-black text-white/5 pointer-events-none uppercase italic leading-none"
       >
         {TOURNAMENTS.find((t) => t.id === currentId)?.name.split("_")[0]}
       </motion.div>

@@ -1,4 +1,6 @@
-import { TournamentLeaderboard } from "@/components/features/matches/TournamentLeaderboard";
+"use server";
+
+import { TournamentLeaderboard } from "@/components/TournamentLeaderboard";
 
 // Имитация получения данных из БД
 async function getTournamentData() {
