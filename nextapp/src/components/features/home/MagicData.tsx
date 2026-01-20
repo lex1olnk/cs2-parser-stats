@@ -1,11 +1,6 @@
-import { FibonacciGrid } from "./FibbonachiGrid";
-
 export const MagicData = () => {
   return (
     <section className="relative w-screen h-screen shrink-0 overflow-hidden bg-[#0a0a0a]">
-      {/* ЖИВАЯ СЕТКА ФИБОНАЧЧИ */}
-      <FibonacciGrid />
-
       {/* ВИДЕО-СФЕРА */}
       <div className="absolute inset-0 flex items-center justify-center">
         <div className="relative w-[75vh] h-[75vh]">

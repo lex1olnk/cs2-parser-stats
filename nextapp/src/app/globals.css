@@ -22,17 +22,4 @@ body {
 }
 
 body::after {
-  content: "";
-  background-repeat: no-repeat;
-  background-color: var(--background);
-  background-image: url("/bg.jpg");
-  background-size: auto;
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  opacity: 0.6; /* 70% прозрачность */
-  mix-blend-mode: lighten; /* режим наложения */
-  z-index: -1; /* отправляем фон на задний план */
 }
