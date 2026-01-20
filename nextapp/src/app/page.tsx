@@ -1,42 +1,39 @@
+import { CombatData } from "@/components/features/home/CombatData";
+import { Draft } from "@/components/features/home/Draft";
+import { HeroSection } from "@/components/features/home/HeroSection";
+import { MagicData } from "@/components/features/home/MagicData";
+import HorizontalScrollRoot from "@/components/layout/HorizontalScrollRoot";
 import { SearchComponent } from "@/components/SearchComponent";
 import { api } from "@/lib/api";
 import Image from "next/image";
 
-interface Player {
-  id: string;
-  nickname: string;
-}
-
-export const revalidate = 3600;
-
-async function getPlayers() {
-  try {
-    const response = await api.get<{ data: { players: Player[] } }>(
-      "/api/players",
-    );
-    return response.data.data.players;
-  } catch (error) {
-    console.error("API Error:", error);
-    return []; // Возвращаем пустые данные вместо исключения
-  }
-}
+// Для реализации параллакса на чистом CSS/Tailwind без тяжелых библиотек
+// мы будем использовать группу 'group' и CSS-переменные или просто фиксированные слои.
 
 export default async function Home() {
-  const data = await getPlayers();
   return (
-    <div className="h-screen grid grid-rows-[10px_1fr_160px] items-center justify-items-center gap-16">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="mx-auto"
-          src="/ul2.png"
-          alt="ul logo"
-          width={180}
-          height={180}
-          priority
-        />
-        {data && <SearchComponent allPlayers={data} />}
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center"></footer>
-    </div>
+    /* Контейнер теперь h-full или min-h-screen, убираем жесткий grid-rows */
+
+    <HorizontalScrollRoot>
+      {/* СЕКЦИЯ 1: HERO */}
+      <section className="w-screen h-screen shrink-0 border-r border-zinc-900">
+        <HeroSection /> {/* Тот код, что мы писали ранее */}
+      </section>
+
+      {/* СЕКЦИЯ 2: COMBAT DATA */}
+      <section className="w-screen h-screen shrink-0 border-r border-zinc-900 bg-[#0d0d0d]">
+        <CombatData />
+      </section>
+
+      {/* СЕКЦИЯ 3: TEAM ASSEMBLY */}
+      <section className="w-screen h-screen shrink-0">
+        <Draft />
+      </section>
+
+      {/* СЕКЦИЯ 4: COMBAT DATA */}
+      <section className="w-screen h-screen shrink-0 border-r border-zinc-900 bg-[#0d0d0d]">
+        <MagicData />
+      </section>
+    </HorizontalScrollRoot>
   );
 }

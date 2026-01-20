@@ -1,10 +1,10 @@
-import { AddParticipantsDto } from "@/lib/server-parse-services/dto/add-participants.dto";
+import { AddParticipantsDto } from "@/services/server/server-parse-services/dto/add-participants.dto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   ParticipantResponseDto,
   TeamResponseDto,
-} from "@/lib/server-parse-services/dto/participant-response.dto";
+} from "@/services/server/server-parse-services/dto/participant-response.dto";
 export async function POST(request: NextRequest) {
   try {
     const { tournamentId, distribution }: AddParticipantsDto =
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
 
     // Собираем все уникальные имена участников
     const allPlayerNames = Object.values(distribution).flatMap(
-      (team) => team.players
+      (team) => team.players,
     );
     const uniquePlayerNames = [...new Set(allPlayerNames)];
 
@@ -32,12 +32,12 @@ export async function POST(request: NextRequest) {
     const teams = await createTeamsAndParticipants(
       tournamentId,
       distribution,
-      profileMap
+      profileMap,
     );
 
     const totalParticipants = teams.reduce(
       (sum, team) => sum + team.participants.length,
-      0
+      0,
     );
 
     return NextResponse.json({
@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
 }
 
 async function findOrCreateProfiles(
-  playerNames: string[]
+  playerNames: string[],
 ): Promise<Map<string, number>> {
   const profileMap = new Map<string, number>();
 
@@ -102,7 +102,7 @@ async function findOrCreateProfiles(
 async function createTeamsAndParticipants(
   tournamentId: string,
   distribution: Record<string, { players: string[] }>,
-  profileMap: Map<string, number>
+  profileMap: Map<string, number>,
 ): Promise<TeamResponseDto[]> {
   const result: TeamResponseDto[] = [];
 
@@ -197,7 +197,7 @@ async function createTeamsAndParticipants(
         if (error.code === "P2002") {
           // Unique constraint violation - участник уже существует в этом турнире
           throw new Error(
-            `Participant ${playerName} is already registered in this tournament`
+            `Participant ${playerName} is already registered in this tournament`,
           );
         }
         throw error;

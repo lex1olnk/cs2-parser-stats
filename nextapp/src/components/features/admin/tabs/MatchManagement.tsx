@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useStore } from "@/store";
 import type { MatchQueryParams } from "@/types/match";
-import { deleteMatch } from "@/services";
+import { deleteMatch } from "@/services/client";
 import {
   SessionItem,
   ProcessingSession,
@@ -65,7 +65,7 @@ export const MatchManagement: React.FC = () => {
         setLastUpdate(Date.now());
 
         const newSessionCount = event.data.sessions.filter(
-          (s: any) => s.status === "pending"
+          (s: any) => s.status === "pending",
         ).length;
         if (newSessionCount > 0) {
           console.log(`Начата обработка ${newSessionCount} матчей`);
@@ -105,7 +105,7 @@ export const MatchManagement: React.FC = () => {
       if (response.ok) {
         const newSessions = await response.json();
         setActiveSessions((prev) =>
-          hasSessionsChanged(prev, newSessions) ? newSessions : prev
+          hasSessionsChanged(prev, newSessions) ? newSessions : prev,
         );
       }
     } catch (err) {
@@ -362,7 +362,7 @@ const PaginationControls: React.FC<{
 // Вспомогательные функции
 const hasSessionsChanged = (
   prev: ProcessingSession[],
-  next: ProcessingSession[]
+  next: ProcessingSession[],
 ): boolean => {
   if (prev.length !== next.length) return true;
 

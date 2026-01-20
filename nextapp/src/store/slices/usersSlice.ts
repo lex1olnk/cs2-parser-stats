@@ -5,7 +5,7 @@ import type {
   PaginationParams,
   ProfilesResponse,
 } from "@/types";
-import { addProfiles, getProfiles, getProfilesCount } from "@/services";
+import { addProfiles, getProfiles, getProfilesCount } from "@/services/client";
 import { api } from "@/lib/api";
 
 export interface ProfileSlice extends ApiState {
@@ -32,7 +32,7 @@ export interface ProfileSlice extends ApiState {
         id: number;
         nickname: string;
       }[];
-    }[]
+    }[],
   ) => void;
   clearError: () => void;
 }
@@ -94,7 +94,7 @@ export const createProfileSlice: StateCreator<
         id: number;
         nickname: string;
       }[];
-    }[]
+    }[],
   ) => {
     set({ loading: true, error: null });
 

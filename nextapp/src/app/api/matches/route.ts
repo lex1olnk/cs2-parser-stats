@@ -1,9 +1,9 @@
-import { demoParserService } from "@/services/server-parse-services/demo-parser-service";
-import { downloadService } from "@/services/server-parse-services/download-service";
-import { MatchesService } from "@/services/server-parse-services/matchesService";
-import { prismaSessionStore } from "@/services/server-parse-services/prisma-session-store";
+import { demoParserService } from "@/services/server/server-parse-services/demo-parser-service";
+import { downloadService } from "@/services/server/server-parse-services/download-service";
+import { MatchesService } from "@/services/server/server-parse-services/matchesService";
+import { prismaSessionStore } from "@/services/server/server-parse-services/prisma-session-store";
 import { prisma } from "@/lib/prisma";
-import { validateMatchesInput } from "@/services/validation/match-validation";
+import { validateMatchesInput } from "@/services/server/validation/match-validation";
 import { Match, MatchesResponse, MatchNew } from "@/types";
 import { NextResponse, NextRequest } from "next/server";
 
@@ -118,7 +118,7 @@ export async function GET(request: Request) {
     console.error("Failed to fetch matches:", error);
     return NextResponse.json(
       { error: "Failed to fetch matches" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
     if (!body.matches) {
       return NextResponse.json(
         { error: "Missing matches array" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -194,7 +194,7 @@ export async function POST(request: NextRequest) {
       {
         error: error instanceof Error ? error.message : "Unknown error",
       },
-      { status: 400 }
+      { status: 400 },
     );
   }
 }
@@ -204,7 +204,7 @@ async function processMatchesSequentially(results: any[], validMatches: any[]) {
   const processingMatches = results.filter((r) => r.status === "pending");
 
   console.log(
-    `Starting SEQUENTIAL processing of ${processingMatches.length} matches`
+    `Starting SEQUENTIAL processing of ${processingMatches.length} matches`,
   );
 
   for (let i = 0; i < processingMatches.length; i++) {
@@ -219,7 +219,7 @@ async function processMatchesSequentially(results: any[], validMatches: any[]) {
     }
 
     console.log(
-      `🔵 Processing match ${i + 1}/${processingMatches.length}: ${result.matchUrl}`
+      `🔵 Processing match ${i + 1}/${processingMatches.length}: ${result.matchUrl}`,
     );
 
     // Обрабатываем один матч и ЖДЕМ его завершения
@@ -259,7 +259,7 @@ async function processSingleMatch(sessionId: string, match: any) {
     const downloadResult = await downloadService.downloadDemo(
       sessionId,
       match.url,
-      match.platform
+      match.platform,
     );
 
     if (!downloadResult.success || !downloadResult.demoPath) {
@@ -280,7 +280,7 @@ async function processSingleMatch(sessionId: string, match: any) {
       sessionId,
       match.url,
       match.tournamentId,
-      demoPath
+      demoPath,
     );
 
     if (!parseResult.success) {
@@ -297,7 +297,7 @@ async function processSingleMatch(sessionId: string, match: any) {
     while (Date.now() - waitStartTime < waitTimeout) {
       const session = await prismaSessionStore.getSession(sessionId);
       const matchProgress = session?.matches.find(
-        (m: any) => m.url === match.url
+        (m: any) => m.url === match.url,
       );
 
       if (matchProgress?.status === "completed") {
@@ -317,7 +317,7 @@ async function processSingleMatch(sessionId: string, match: any) {
     // Проверяем таймаут
     if (!callbackReceived) {
       throw new Error(
-        "Parsing timeout - no callback received within 30 seconds"
+        "Parsing timeout - no callback received within 30 seconds",
       );
     }
 

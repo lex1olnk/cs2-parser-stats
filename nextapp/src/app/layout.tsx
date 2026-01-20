@@ -19,7 +19,7 @@ export default async function RootLayout({
     <html lang="en" className={nunito.className}>
       <body>
         <Navbar />
-        <main className={"pt-16"}>{children}</main>
+        <main>{children}</main>
       </body>
     </html>
   );

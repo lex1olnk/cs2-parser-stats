@@ -1,6 +1,6 @@
-import { CreateTournamentDto } from "@/lib/server-parse-services/dto/create-tournament.dto";
-import { MatchesService } from "@/lib/server-parse-services/matchesService";
-import { TournamentsService } from "@/lib/server-parse-services/tournaments.service";
+import { CreateTournamentDto } from "@/services/server/server-parse-services/dto/create-tournament.dto";
+import { MatchesService } from "@/services/server/server-parse-services/matchesService";
+import { TournamentsService } from "@/services/server/server-parse-services/tournaments.service";
 import { NextRequest, NextResponse } from "next/server";
 
 const tournamentsService: TournamentsService = new TournamentsService();
@@ -12,7 +12,7 @@ export async function GET() {
   } catch (error) {
     return NextResponse.json(
       { error: "Failed to fetch matches" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     if (!body.name || !body.status) {
       return NextResponse.json(
         { error: "Name and status are required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -40,13 +40,13 @@ export async function POST(request: NextRequest) {
         message: "Tournament created successfully",
         tournament: tournament,
       },
-      { status: 201 }
+      { status: 201 },
     );
   } catch (error) {
     console.error("Error creating tournament:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

@@ -1,6 +1,6 @@
 import type { StateCreator } from "zustand";
 import type { ApiState, MatchesResponse, MatchInput, MatchNew } from "@/types";
-import { createMatches, getMatches } from "@/services";
+import { createMatches, getMatches } from "@/services/client";
 
 interface CreateMatchData {
   matches: MatchInput[];
@@ -40,7 +40,7 @@ export interface MatchSlice extends ApiState {
 
 export const createMatchSlice: StateCreator<MatchSlice, [], [], MatchSlice> = (
   set,
-  get
+  get,
 ) => ({
   // Начальное состояние
   recentSessionIds: [],
@@ -70,7 +70,7 @@ export const createMatchSlice: StateCreator<MatchSlice, [], [], MatchSlice> = (
       () => {
         get().clearRecentSession(sessionId);
       },
-      5 * 60 * 1000
+      5 * 60 * 1000,
     );
   },
 

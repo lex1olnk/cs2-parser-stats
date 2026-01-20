@@ -13,6 +13,7 @@
     "@prisma/client": "^7.1.0",
     "@svgr/webpack": "^8.1.0",
     "axios": "^1.8.4",
+    "framer-motion": "^12.27.1",
     "next": "^15.5.7",
     "prisma": "^7.1.0",
     "react": "^19.0.0",

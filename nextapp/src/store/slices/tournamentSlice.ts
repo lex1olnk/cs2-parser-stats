@@ -1,6 +1,10 @@
 import type { StateCreator } from "zustand";
 import type { Tournament, CreateTournamentData, ApiState } from "@/types";
-import { createTournament, deleteTournament, getTournaments } from "@/services";
+import {
+  createTournament,
+  deleteTournament,
+  getTournaments,
+} from "@/services/client";
 
 export interface TournamentSlice extends ApiState {
   tournaments: Tournament[];

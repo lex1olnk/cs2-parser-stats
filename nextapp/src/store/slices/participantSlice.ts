@@ -1,6 +1,6 @@
 import type { StateCreator } from "zustand";
 import type { ApiState } from "@/types";
-import { participantService } from "@/services";
+import { participantService } from "@/services/client";
 
 export interface AddParticipantsData {
   tournamentId: string;
