@@ -19,7 +19,7 @@ export const HeroSection = () => {
   };
 
   return (
-    <section className="h-full w-full flex flex-col justify-center px-12">
+    <section className="h-full w-full relative flex flex-col justify-center px-12">
       <div className="space-y-4">
         <span className="text-zinc-600 font-mono text-[10px] tracking-[0.5em]">
           SELECT_ACTIVE_DATABASE_NODE
