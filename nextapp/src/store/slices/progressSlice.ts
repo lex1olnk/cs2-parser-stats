@@ -43,7 +43,7 @@ export const createProgressSlice: StateCreator<ProgressSlice> = (set, get) => ({
       setProcessingProgress(progress);
       setProgressError(null);
     } catch (error) {
-      setProgressError("err");
+      setProgressError(error instanceof Error ? error.message : "Failed to fetch progress");
       console.error("Error fetching progress:", error);
     } finally {
       setIsProgressLoading(false);

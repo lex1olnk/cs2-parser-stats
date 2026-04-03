@@ -1,4 +1,4 @@
-import MatchImporter from "@/components/tournaments/MatchImporter";
+import MatchImporter from "@/components/MatchImporter";
 import { getTournaments } from "./api";
 
 export const dynamic = 'force-dynamic'; // Важно!

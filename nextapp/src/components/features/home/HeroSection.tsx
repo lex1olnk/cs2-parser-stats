@@ -1,22 +1,30 @@
 "use client";
-import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
+import { useStore } from "@/store";
+import { useEffect } from "react";
 
-const TOURNAMENTS = [
-  { id: "pgl_2024", name: "PGL_Major" },
-  { id: "iem_katowice", name: "IEM_Katowice" },
-  { id: "blast_final", name: "Blast_Premier" },
-];
+interface Tournament {
+  id: string;
+  name: string;
+  status: string;
+}
 
-export const HeroSection = () => {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const currentId = searchParams.get("tournament") || TOURNAMENTS[0].id;
+interface HeroSectionProps {
+  tournaments: Tournament[];
+}
 
-  const handleSelect = (id: string) => {
-    // Обновляем URL: ?tournament=pgl_2024
-    router.push(`?tournament=${id}`, { scroll: false });
-  };
+export const HeroSection = ({ tournaments }: HeroSectionProps) => {
+  const activeTournamentId = useStore((state) => state.activeTournamentId);
+  const setActiveTournamentId = useStore((state) => state.setActiveTournamentId);
+
+  // Выбираем первый турнир по умолчанию
+  useEffect(() => {
+    if (tournaments.length > 0 && !activeTournamentId) {
+      setActiveTournamentId(tournaments[0].id);
+    }
+  }, [tournaments, activeTournamentId, setActiveTournamentId]);
+
+  const currentId = activeTournamentId ?? tournaments[0]?.id ?? null;
 
   return (
     <section className="h-full w-full relative flex flex-col justify-center px-12">
@@ -25,10 +33,10 @@ export const HeroSection = () => {
           SELECT_ACTIVE_DATABASE_NODE
         </span>
         <div className="flex flex-wrap gap-4">
-          {TOURNAMENTS.map((t) => (
+          {tournaments.map((t) => (
             <button
               key={t.id}
-              onClick={() => handleSelect(t.id)}
+              onClick={() => setActiveTournamentId(t.id)}
               className={`px-6 py-3 border transition-all duration-300 uppercase font-black italic tracking-tighter text-2xl ${
                 currentId === t.id
                   ? "bg-white text-black border-white"
@@ -41,14 +49,14 @@ export const HeroSection = () => {
         </div>
       </div>
 
-      {/* Большой фоновый текст, меняющийся от выбора */}
       <motion.div
-        key={currentId}
+        key={currentId ?? "empty"}
         initial={{ opacity: 0, x: 20 }}
         animate={{ opacity: 1, x: 0 }}
         className="absolute bottom-10 right-10 text-[15vw] font-black text-white/5 pointer-events-none uppercase italic leading-none"
       >
-        {TOURNAMENTS.find((t) => t.id === currentId)?.name.split("_")[0]}
+        {tournaments.find((t) => t.id === currentId)?.name.split("_")[0] ??
+          tournaments.find((t) => t.id === currentId)?.name.slice(0, 6)}
       </motion.div>
     </section>
   );

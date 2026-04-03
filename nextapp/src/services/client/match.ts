@@ -22,8 +22,7 @@ export const createMatches = async (data: {
   };
   console.log(requestData);
   const response = await api.post("/matches", requestData);
-  return [];
-  // Преобразуем ответ API в наш внутренний формат
+  return response.data;
 };
 
 // Получение всех матчей

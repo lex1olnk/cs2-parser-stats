@@ -10,7 +10,10 @@ import { useStore } from "@/store";
 
 export function HybridScroll({ children }: { children: React.ReactNode }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({ target: containerRef });
+  const { scrollYProgress } = useScroll({
+    target: containerRef,
+    offset: ["start start", "end start"],
+  });
 
   const setScrollYProgress = useStore((state) => state.setScrollYProgress);
   const setActiveSection = useStore((state) => state.setActiveSection);

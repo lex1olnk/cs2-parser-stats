@@ -131,7 +131,7 @@ export const createMatchSlice: StateCreator<MatchSlice, [], [], MatchSlice> = (
       set({
         matches: response.data,
         pagination: {
-          currentPage: response.pagination.page / 10,
+          currentPage: response.pagination.page,
           pageSize: response.pagination.limit,
           total: response.pagination.total,
           totalPages: response.pagination.totalPages,

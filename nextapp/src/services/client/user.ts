@@ -41,4 +41,5 @@ export const addProfiles = async (
   const response = await api.post("/users/profile", {
     data,
   });
+  return response.data;
 };

@@ -8,6 +8,7 @@ import {
 
 export interface TournamentSlice extends ApiState {
   tournaments: Tournament[];
+  activeTournamentId: string | null;
 
   // Действия
   addTournament: (data: CreateTournamentData) => Promise<void>;
@@ -18,6 +19,7 @@ export interface TournamentSlice extends ApiState {
   ) => Promise<void>;*/
   deleteTournament: (id: string) => Promise<void>;
   setTournaments: (tournaments: Tournament[]) => void;
+  setActiveTournamentId: (id: string | null) => void;
   clearError: () => void;
 }
 
@@ -29,6 +31,7 @@ export const createTournamentSlice: StateCreator<
 > = (set, get) => ({
   // Начальное состояние
   tournaments: [],
+  activeTournamentId: null,
   loading: false,
   error: null,
 
@@ -129,6 +132,10 @@ export const createTournamentSlice: StateCreator<
 
   setTournaments: (tournaments: Tournament[]) => {
     set({ tournaments });
+  },
+
+  setActiveTournamentId: (id: string | null) => {
+    set({ activeTournamentId: id });
   },
 
   clearError: () => {

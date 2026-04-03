@@ -4,7 +4,7 @@ import {
   exportMatches,
   postAndAttachMatches,
   updateTournamentPlayers,
-} from "@/app/upload/api";
+} from "@/app/(public)/upload/api";
 import { useState } from "react";
 import { TournamentSearch } from "./TournamentSearch";
 

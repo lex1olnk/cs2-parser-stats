@@ -80,10 +80,12 @@ export class PrismaSessionStore {
         (m: any) => m.status === "completed"
       ).length;
       const totalProgress =
-        updatedMatches.reduce(
-          (sum: number, match: any) => sum + match.progress,
-          0
-        ) / session.totalMatches;
+        session.totalMatches > 0
+          ? updatedMatches.reduce(
+              (sum: number, match: any) => sum + match.progress,
+              0
+            ) / session.totalMatches
+          : 0;
 
       // Сохраняем в БД
       await this.updateSession(sessionId, {

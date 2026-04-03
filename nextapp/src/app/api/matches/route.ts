@@ -317,7 +317,7 @@ async function processSingleMatch(sessionId: string, match: any) {
     // Проверяем таймаут
     if (!callbackReceived) {
       throw new Error(
-        "Parsing timeout - no callback received within 30 seconds",
+        "Parsing timeout - no callback received within 60 seconds",
       );
     }
 

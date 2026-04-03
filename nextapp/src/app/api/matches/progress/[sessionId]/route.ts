@@ -1,5 +1,5 @@
 // app/api/matches/progress/[sessionId]/route.ts
-import { prismaSessionStore } from "@/lib/server-parse-services/prisma-session-store";
+import { prismaSessionStore } from "@/services/server/server-parse-services/prisma-session-store";
 import { NextRequest, NextResponse } from "next/server";
 
 // Важно: в App Router params передается как объект

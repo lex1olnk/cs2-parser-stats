@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 export async function GET() {
   try {
     // Получаем ВСЕ сессии за последние 24 часа, включая завершенные
-    const twentyFourHoursAgo = new Date(Date.now() - 30 * 60 * 1000);
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
     const allSessions = await prisma.processingSession.findMany({
       where: {

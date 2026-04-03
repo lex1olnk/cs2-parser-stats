@@ -5,15 +5,15 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     console.log({ searchParams });
-    const playerId = Number(searchParams.get("playerId")!);
-    const tournamentId = searchParams.get("tournamentId");
-
     if (!searchParams.get("playerId")) {
       return NextResponse.json(
         { error: "playerId is required" },
         { status: 400 }
       );
     }
+
+    const playerId = Number(searchParams.get("playerId"));
+    const tournamentId = searchParams.get("tournamentId");
 
     const result: any[] = await prisma.$queryRaw`
        SELECT w.internal_name as weapon

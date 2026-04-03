@@ -1,7 +1,7 @@
 // app/api/parse/callback/route.ts
 
-import { databaseService } from "@/lib/server-parse-services/database-service";
-import { prismaSessionStore } from "@/lib/server-parse-services/prisma-session-store";
+import { databaseService } from "@/services/server/server-parse-services/database-service";
+import { prismaSessionStore } from "@/services/server/server-parse-services/prisma-session-store";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
       const { sessionId, matchUrl } = await getParams(request);
       await prismaSessionStore.updateMatchProgress(sessionId, matchUrl, {
         status: "error",
-        error: `Database save failed: `,
+        error: `Database save failed: ${error instanceof Error ? error.message : String(error)}`,
       });
     } catch (e) {
       console.error("Failed to update error status:", e);
