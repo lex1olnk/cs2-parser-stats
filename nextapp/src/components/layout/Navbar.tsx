@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useStore } from "@/store";
+import { AuthChip } from "@/components/features/auth/AuthChip";
 
 function TournamentLink() {
   const activeTournamentId = useStore((state) => state.activeTournamentId);
@@ -56,8 +57,9 @@ export function Navbar() {
             </div>
 
             {/* Правая часть */}
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center gap-3">
               <TournamentLink />
+              <AuthChip />
             </div>
           </div>
         </div>

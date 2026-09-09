@@ -2,12 +2,38 @@ import { demoParserService } from "@/services/server/server-parse-services/demo-
 import { downloadService } from "@/services/server/server-parse-services/download-service";
 import { MatchesService } from "@/services/server/server-parse-services/matchesService";
 import { prismaSessionStore } from "@/services/server/server-parse-services/prisma-session-store";
+import { refreshStatsViews } from "@/services/server/server-parse-services/stats-refresh-service";
+import { waitForParseCallback } from "@/services/server/server-parse-services/demo-ingest-service";
 import { prisma } from "@/lib/prisma";
-import { validateMatchesInput } from "@/services/server/validation/match-validation";
-import { Match, MatchesResponse, MatchNew } from "@/types";
+import { requireAdmin } from "@/lib/auth/guards";
+import {
+  checkRateLimit,
+  isPipelineBusy,
+  releasePipeline,
+  tryAcquirePipeline,
+} from "@/lib/rate-limit";
 import { NextResponse, NextRequest } from "next/server";
 
 const matchesService: MatchesService = new MatchesService();
+
+// Имена полей сортировки приходят из query и подставляются в orderBy —
+// поэтому только из белого списка, а не как есть.
+const SORTABLE_FIELDS = [
+  "createdAt",
+  "startedAt",
+  "finishedAt",
+  "status",
+  "type",
+] as const;
+
+function parseOrderBy(sortBy: string | null, sortOrder: string | null) {
+  const field = SORTABLE_FIELDS.includes(sortBy as never)
+    ? (sortBy as (typeof SORTABLE_FIELDS)[number])
+    : "createdAt";
+  const direction = sortOrder === "asc" ? "asc" : "desc";
+
+  return { [field]: direction };
+}
 
 function filterValidMatches(matches: any[]) {
   return matches.filter((match) => {
@@ -53,8 +79,10 @@ export async function GET(request: Request) {
     const skip = (page - 1) * limit;
 
     // Параметры сортировки
-    const sortBy = searchParams.get("sortBy") || "createdAt";
-    const sortOrder = searchParams.get("sortOrder") || "desc";
+    const orderBy = parseOrderBy(
+      searchParams.get("sortBy"),
+      searchParams.get("sortOrder"),
+    );
 
     // Строим фильтр
     const where: {
@@ -81,7 +109,7 @@ export async function GET(request: Request) {
         where,
         skip,
         take: limit,
-        orderBy: { [sortBy]: sortOrder },
+        orderBy,
         include: {
           tournament: true,
           teams: true,
@@ -124,6 +152,28 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: NextRequest) {
+  // Загрузка матча тянет за собой внешние запросы, скачивание файлов на диск
+  // и запись в БД — только для админов.
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
+
+  const limit = checkRateLimit(`matches:${guard.user.id}`, 5, 60_000);
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: "Too many upload requests", retryAfter: limit.retryAfter },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfter) } },
+    );
+  }
+
+  // Пайплайн работает с общей папкой shared-demos, поэтому второй
+  // параллельный прогон затирал бы файлы первого.
+  if (isPipelineBusy()) {
+    return NextResponse.json(
+      { error: "Обработка уже идёт, дождись её завершения" },
+      { status: 409 },
+    );
+  }
+
   try {
     const body = await request.json();
 
@@ -178,8 +228,19 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Запускаем обработку ПОСЛЕДОВАТЕЛЬНО (по одному матчу)
-    processMatchesSequentially(results, validMatches);
+    // Запускаем обработку ПОСЛЕДОВАТЕЛЬНО (по одному матчу).
+    // Флаг снимается в любом случае, иначе один сбой заблокирует загрузки
+    // до перезапуска процесса.
+    if (!tryAcquirePipeline()) {
+      return NextResponse.json(
+        { error: "Обработка уже идёт, дождись её завершения" },
+        { status: 409 },
+      );
+    }
+
+    processMatchesSequentially(results, validMatches)
+      .catch((error) => console.error("Pipeline failed:", error))
+      .finally(releasePipeline);
 
     return NextResponse.json({
       results: results,
@@ -230,6 +291,12 @@ async function processMatchesSequentially(results: any[], validMatches: any[]) {
       console.log(`⏸️ Waiting 2 seconds before next match...`);
       await new Promise((resolve) => setTimeout(resolve, 2000));
     }
+  }
+
+  // Без пересчёта вьюшек загруженные матчи не появятся в лидербордах.
+  // Делаем это один раз на всю пачку, а не после каждого матча.
+  if (processingMatches.length > 0) {
+    await refreshStatsViews();
   }
 
   console.log(`✅ Completed processing all matches sequentially`);
@@ -289,37 +356,9 @@ async function processSingleMatch(sessionId: string, match: any) {
 
     console.log(`✅ Demo sent to parser, waiting for callback...`);
 
-    // 3. Ждем callback от парсера
-    const waitStartTime = Date.now();
-    const waitTimeout = 60000; // 60 секунд
-    let callbackReceived = false;
-
-    while (Date.now() - waitStartTime < waitTimeout) {
-      const session = await prismaSessionStore.getSession(sessionId);
-      const matchProgress = session?.matches.find(
-        (m: any) => m.url === match.url,
-      );
-
-      if (matchProgress?.status === "completed") {
-        console.log(`✅ Callback received, parsing completed for ${match.url}`);
-        callbackReceived = true;
-        break;
-      }
-
-      if (matchProgress?.status === "error") {
-        throw new Error(`Parsing failed: ${matchProgress.error}`);
-      }
-
-      // Ждем 2 секунды перед следующей проверкой
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-    }
-
-    // Проверяем таймаут
-    if (!callbackReceived) {
-      throw new Error(
-        "Parsing timeout - no callback received within 60 seconds",
-      );
-    }
+    // 3. Ждем callback от парсера (та же логика, что и у импорта локальных демок)
+    await waitForParseCallback(sessionId, match.url);
+    console.log(`✅ Callback received, parsing completed for ${match.url}`);
 
     // 4. Успешное завершение
     console.log(`🎉 Match processing completed successfully: ${match.url}`);

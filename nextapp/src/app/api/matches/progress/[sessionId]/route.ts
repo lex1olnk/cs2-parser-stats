@@ -2,11 +2,10 @@
 import { prismaSessionStore } from "@/services/server/server-parse-services/prisma-session-store";
 import { NextRequest, NextResponse } from "next/server";
 
-// Важно: в App Router params передается как объект
-// app/api/matches/progress/[sessionId]/route.ts
+// В Next 15 params приходит промисом — его нужно дожидаться.
 export async function GET(
   request: NextRequest,
-  context: { params: { sessionId: string } }
+  context: { params: Promise<{ sessionId: string }> }
 ) {
   try {
     const { sessionId } = await context.params;

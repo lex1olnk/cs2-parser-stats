@@ -3,8 +3,6 @@ import { useStore } from "@/store";
 
 interface ProfileData {
   name: string;
-  email: string;
-  faceitLink: string;
   users: {
     id: number;
     nickname: string;
@@ -26,8 +24,6 @@ const AddProfileForm: React.FC = () => {
   const [profiles, setProfiles] = useState<ProfileData[]>([
     {
       name: "",
-      email: "",
-      faceitLink: "",
       users: [],
     },
   ]);
@@ -50,8 +46,6 @@ const AddProfileForm: React.FC = () => {
       ...prev,
       {
         name: "",
-        email: "",
-        faceitLink: "",
         users: [],
       },
     ]);
@@ -130,12 +124,10 @@ const AddProfileForm: React.FC = () => {
     e.preventDefault();
 
     // Проверка обязательных полей для всех профилей
-    const hasEmptyFields = profiles.some(
-      (profile) => !profile.name.trim() || !profile.email.trim()
-    );
+    const hasEmptyFields = profiles.some((profile) => !profile.name.trim());
 
     if (hasEmptyFields) {
-      alert("Заполните обязательные поля (Имя и Email) для всех профилей");
+      alert("Заполните имя для всех профилей");
       return;
     }
 
@@ -146,8 +138,6 @@ const AddProfileForm: React.FC = () => {
       setProfiles([
         {
           name: "",
-          email: "",
-          faceitLink: "",
           users: [],
         },
       ]);
@@ -252,63 +242,25 @@ const AddProfileForm: React.FC = () => {
               </div>
 
               {/* Основная информация профиля */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                {/* Имя */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Имя *
-                  </label>
-                  <input
-                    type="text"
-                    value={profile.name}
-                    onChange={(e) =>
-                      handleProfileChange(profileIndex, "name", e.target.value)
-                    }
-                    placeholder="Введите полное имя"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    required
-                    disabled={loading}
-                  />
-                </div>
-
-                {/* Email */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Email *
-                  </label>
-                  <input
-                    type="email"
-                    value={profile.email}
-                    onChange={(e) =>
-                      handleProfileChange(profileIndex, "email", e.target.value)
-                    }
-                    placeholder="example@company.com"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    required
-                    disabled={loading}
-                  />
-                </div>
-              </div>
-
-              {/* FACEIT ссылка */}
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  FACEIT ссылка
+                  Игровое имя *
                 </label>
                 <input
                   type="text"
-                  value={profile.faceitLink}
+                  value={profile.name}
                   onChange={(e) =>
-                    handleProfileChange(
-                      profileIndex,
-                      "faceitLink",
-                      e.target.value
-                    )
+                    handleProfileChange(profileIndex, "name", e.target.value)
                   }
-                  placeholder="https://www.faceit.com/..."
+                  placeholder="Никнейм игрока"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                  required
                   disabled={loading}
                 />
+                <p className="mt-1 text-xs text-gray-500">
+                  Контактные данные не хранятся — игрок идентифицируется по
+                  Steam-аккаунту
+                </p>
               </div>
 
               {/* Пользователи */}
@@ -399,10 +351,7 @@ const AddProfileForm: React.FC = () => {
             <button
               type="submit"
               disabled={
-                loading ||
-                profiles.some(
-                  (profile) => !profile.name.trim() || !profile.email.trim()
-                )
+                loading || profiles.some((profile) => !profile.name.trim())
               }
               className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white py-3 px-4 rounded-md transition-all duration-200 font-medium transform hover:scale-105 active:scale-95 disabled:transform-none"
             >

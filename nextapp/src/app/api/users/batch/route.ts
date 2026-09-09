@@ -5,7 +5,12 @@ import {
   ParticipantResponseDto,
   TeamResponseDto,
 } from "@/services/server/server-parse-services/dto/participant-response.dto";
+import { requireAdmin } from "@/lib/auth/guards";
+
 export async function POST(request: NextRequest) {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
+
   try {
     const { tournamentId, distribution }: AddParticipantsDto =
       await request.json();

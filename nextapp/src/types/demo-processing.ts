@@ -5,7 +5,8 @@ export interface MatchInput {
   url: string;
   tournamentId: string | null;
   isFinal: boolean;
-  platform: "fastcup" | "cybershoke";
+  // "local" — демка уже лежала в shared-demos, скачивание не выполнялось.
+  platform: "fastcup" | "cybershoke" | "local";
 }
 
 export interface ProcessingSession {
@@ -30,7 +31,8 @@ export interface ProcessingProgress {
 export interface MatchProgress {
   url: string;
   tournamentId?: string;
-  platform: "fastcup" | "cybershoke";
+  // "local" — демка уже лежала в shared-demos, скачивание не выполнялось.
+  platform: "fastcup" | "cybershoke" | "local";
   status: "pending" | "downloading" | "parsing" | "completed" | "error";
   progress: number; // 0-100
   currentStep?: string;

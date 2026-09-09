@@ -1,9 +1,14 @@
 {
   "name": "cs-parser",
   "version": "1.0.0",
-  "description": "",
+  "description": "CS2 demo parsing service",
   "main": "index.js",
+  "engines": {
+    "node": ">=20.6"
+  },
   "scripts": {
+    "start": "node --env-file=.env index.js",
+    "dev": "nodemon --exec \"node --env-file=.env index.js\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
@@ -12,7 +17,6 @@
     "@laihoe/demoparser2": "^0.39.1",
     "@prisma/client": "^6.17.1",
     "adm-zip": "^0.5.16",
-    "cors": "^2.8.5",
     "express": "^5.1.0"
   },
   "devDependencies": {

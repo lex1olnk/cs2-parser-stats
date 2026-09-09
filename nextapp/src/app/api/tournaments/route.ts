@@ -1,6 +1,6 @@
 import { CreateTournamentDto } from "@/services/server/server-parse-services/dto/create-tournament.dto";
-import { MatchesService } from "@/services/server/server-parse-services/matchesService";
 import { TournamentsService } from "@/services/server/server-parse-services/tournaments.service";
+import { requireAdmin } from "@/lib/auth/guards";
 import { NextRequest, NextResponse } from "next/server";
 
 const tournamentsService: TournamentsService = new TournamentsService();
@@ -18,6 +18,9 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
+
   try {
     // Получаем данные из тела запроса
     const body: CreateTournamentDto = await request.json();

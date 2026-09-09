@@ -1,3 +1,7 @@
+# ВНИМАНИЕ: файл лежит в nextapp/workflows/, а не в .github/workflows/,
+# поэтому GitHub Actions его НЕ запускает. Чтобы включить автодеплой,
+# перенеси его в .github/workflows/deploy.yml.
+
 name: Deploy to Server
 
 on:
@@ -15,7 +19,5 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd /opt/ulmixcup/nextapp
-            git pull origin main
-            docker-compose build nextapp
-            docker-compose up -d
+            cd /opt/ulmixcup
+            ./migrate.sh

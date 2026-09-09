@@ -1,26 +1,15 @@
-import {
-  IsString,
-  IsObject,
-  IsNotEmpty,
-  ValidateNested,
-  IsArray,
-  IsOptional,
-} from 'class-validator';
-import { Type } from 'class-transformer';
+// Форма тела запроса POST /api/users/batch.
+//
+// Раньше здесь были классы с декораторами class-validator, но ни сам пакет,
+// ни class-transformer в зависимостях не значились, а validate() никто не
+// вызывал — декораторы были мёртвым кодом, ломавшим сборку типов.
+// Валидация входа живёт в самом роуте.
 
-class TeamDistributionDto {
-  @IsArray()
-  @IsNotEmpty()
+export interface TeamDistribution {
   players: string[];
 }
 
-export class AddParticipantsDto {
-  @IsString()
-  @IsNotEmpty()
+export interface AddParticipantsDto {
   tournamentId: string;
-
-  @IsObject()
-  @ValidateNested()
-  @Type(() => TeamDistributionDto)
-  distribution: Record<string, TeamDistributionDto>;
+  distribution: Record<string, TeamDistribution>;
 }

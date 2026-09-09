@@ -1,7 +1,8 @@
 // services/database-service.ts
 import { prisma } from "@/lib/prisma";
-import { Prisma, PrismaClient } from "@/../prisma/generated/client";
-import { Weapon } from "@prisma/client";
+// Prisma 7 не реэкспортирует модели из "@prisma/client" — типы моделей
+// берутся из сгенерированного клиента.
+import { Prisma, PrismaClient, Weapon } from "@/../prisma/generated/client";
 
 // Тип для транзакционного клиента Prisma
 type PrismaTransactionalClient = Parameters<
@@ -670,7 +671,9 @@ export class DatabaseService {
             internalName: weaponName,
             inventoryName: weaponName,
             cost: 0,
-            // type можно не указывать, так как оно optional
+            // Без типа не работает фильтрация статистики по категориям
+            // (например, урон гранатами в /api/stats/stats).
+            type: this.mapWeaponType(weaponName),
           },
         });
         return weapon.id;
@@ -737,15 +740,74 @@ export class DatabaseService {
     return reasonMap[reason || ""] || 0;
   }
 
+  // Парсер отдаёт внутренние имена CS2 (ak47, deagle, hegrenade), а не
+  // человекочитаемые названия — поэтому сопоставление по списку, а не по
+  // подстрокам вроде "rifle": таких слов в этих именах нет.
+  // Категории должны совпадать с бэкфиллом в миграции
+  // 20260909020000_kill_trades_and_weapon_types.
+  private static readonly WEAPON_TYPES: Record<string, string> = {
+    hegrenade: "grenade",
+    flashbang: "grenade",
+    smokegrenade: "grenade",
+    molotov: "grenade",
+    incgrenade: "grenade",
+    inferno: "grenade",
+    decoy: "grenade",
+
+    knife: "melee",
+    knife_t: "melee",
+    bayonet: "melee",
+
+    deagle: "pistol",
+    elite: "pistol",
+    fiveseven: "pistol",
+    glock: "pistol",
+    hkp2000: "pistol",
+    p250: "pistol",
+    revolver: "pistol",
+    tec9: "pistol",
+    usp_silencer: "pistol",
+    cz75a: "pistol",
+
+    bizon: "smg",
+    mac10: "smg",
+    mp5sd: "smg",
+    mp7: "smg",
+    mp9: "smg",
+    p90: "smg",
+    ump45: "smg",
+
+    ak47: "rifle",
+    aug: "rifle",
+    famas: "rifle",
+    galilar: "rifle",
+    m4a1: "rifle",
+    m4a1_silencer: "rifle",
+    sg556: "rifle",
+
+    awp: "sniper",
+    ssg08: "sniper",
+    scar20: "sniper",
+    g3sg1: "sniper",
+
+    mag7: "shotgun",
+    nova: "shotgun",
+    sawedoff: "shotgun",
+    xm1014: "shotgun",
+
+    m249: "machinegun",
+    negev: "machinegun",
+
+    kevlar: "equipment",
+    kevlar_helmet: "equipment",
+    defuse: "equipment",
+    taser: "equipment",
+  };
+
   private mapWeaponType(weaponName?: string): string {
-    if (!weaponName) return "Other";
-    if (weaponName.includes("knife")) return "Melee";
-    if (weaponName.includes("pistol")) return "Pistol";
-    if (weaponName.includes("rifle")) return "Rifle";
-    if (weaponName.includes("smg")) return "SMG";
-    if (weaponName.includes("shotgun")) return "Shotgun";
-    if (weaponName.includes("sniper")) return "Sniper";
-    return "Other";
+    if (!weaponName) return "other";
+
+    return DatabaseService.WEAPON_TYPES[weaponName.toLowerCase()] ?? "other";
   }
 }
 

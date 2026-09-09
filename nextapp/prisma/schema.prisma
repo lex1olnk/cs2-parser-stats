@@ -185,11 +185,13 @@ model MatchMember {
 }
 
 model User {
-  id        Int     @id @default(autoincrement())
-  nickname  String  @map("nickname")
-  avatar    String?
-  profileId Int?    @map("profile_id")
-  steamId   String  @unique @map("steam_id")
+  id          Int       @id @default(autoincrement())
+  nickname    String    @map("nickname")
+  avatar      String?
+  profileId   Int?      @map("profile_id")
+  steamId     String    @unique @map("steam_id")
+  isAdmin     Boolean   @default(false) @map("is_admin")
+  lastLoginAt DateTime? @map("last_login_at")
 
   // Relations
   profile            Profile?             @relation(fields: [profileId], references: [id])
@@ -214,9 +216,11 @@ model User {
 }
 
 model Profile {
-  id    Int     @id @default(autoincrement())
-  name  String  @unique
-  email String? @unique
+  id   Int    @id @default(autoincrement())
+  name String @unique
+
+  // Персональные данные (email и т.п.) здесь не хранятся:
+  // идентичность игрока — это Steam-аккаунт в модели User.
 
   // Relations
   users                 User[]

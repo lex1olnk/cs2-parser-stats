@@ -111,15 +111,14 @@ export interface ApiState {
   error: string | null;
 }
 
+// Соответствует модели Profile в schema.prisma: персональных данных здесь нет,
+// идентичность игрока живёт в User (Steam).
 export interface Profile {
   id: number;
   name: string;
-  email: string | null;
-  faceitLink: string;
-  createdAt: string;
-  userCount?: number;
-  isLinkedToUsers?: boolean;
-  users: Array<{ id: number }>;
+  userCount: number;
+  isLinkedToUsers: boolean;
+  users: Array<{ id: number; nickname: string; steamId: string }>;
 }
 
 export interface ProfilesResponse {

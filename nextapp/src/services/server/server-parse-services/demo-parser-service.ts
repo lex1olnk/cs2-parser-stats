@@ -1,5 +1,8 @@
 import path from "path";
 
+import { getAppUrl } from "@/lib/app-url";
+import { getInternalToken, INTERNAL_TOKEN_HEADER } from "@/lib/auth/internal";
+
 const DEMO_SERVER_URL = process.env.DEMO_SERVER_URL || "http://localhost:3001";
 
 export class DemoParserService {
@@ -12,8 +15,7 @@ export class DemoParserService {
     try {
       console.log(`🔄 Sending demo to parser: ${demoPath}`);
 
-      const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
-      const callbackUrl = `${baseUrl}/api/parse/callback?sessionId=${sessionId}&matchUrl=${encodeURIComponent(matchUrl)}${tournamentId ? "&tournamentId=" + tournamentId : ""}`;
+      const callbackUrl = `${getAppUrl()}/api/parse/callback?sessionId=${sessionId}&matchUrl=${encodeURIComponent(matchUrl)}${tournamentId ? "&tournamentId=" + tournamentId : ""}`;
 
       console.log(`📞 Callback URL: ${callbackUrl}`);
 
@@ -22,7 +24,10 @@ export class DemoParserService {
 
       const response = await fetch(`${DEMO_SERVER_URL}/parse-demo`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          [INTERNAL_TOKEN_HEADER]: getInternalToken(),
+        },
         body: JSON.stringify({
           fileName: fileName, // ТОЛЬКО имя файла
           callbackUrl: callbackUrl,

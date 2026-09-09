@@ -26,8 +26,6 @@ export interface ProfileSlice extends ApiState {
   addProfiles: (
     formData: {
       name: string;
-      email: string | null;
-      faceitLink: string | null;
       users: {
         id: number;
         nickname: string;
@@ -88,8 +86,6 @@ export const createProfileSlice: StateCreator<
   addProfiles: async (
     data: {
       name: string;
-      email: string | null;
-      faceitLink: string | null;
       users: {
         id: number;
         nickname: string;

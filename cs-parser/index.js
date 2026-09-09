@@ -1,10 +1,14 @@
 // demo-server/index.js (обновленная версия)
 const express = require("express");
 const fs = require("fs");
-const cors = require("cors");
 const path = require("path");
 const { parseAllData } = require("./parser-functions");
 const { analyzeMatchData } = require("./demo-analyzer"); // <--- ДОБАВЛЕНО
+const {
+  requireInternalToken,
+  resolveDemoPath,
+  assertAllowedCallbackUrl,
+} = require("./security");
 
 const ArchiveService = require("./archive-service");
 
@@ -12,12 +16,17 @@ const archiveService = new ArchiveService();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+// Парсер — служебный сервис. Наружу он не публикуется: слушаем только
+// локальный интерфейс, снаружи к нему ходит исключительно nextapp.
+const BIND_HOST = process.env.BIND_HOST || "127.0.0.1";
 
 // Абсолютный путь к общей папке демо
 const PROJECT_ROOT = path.join(__dirname, "..");
 const SHARED_DEMOS_DIR = path.join(PROJECT_ROOT, "shared-demos");
-app.use(cors());
-app.use(express.json());
+
+// CORS намеренно не подключаем: браузер сюда не ходит, только сервер.
+app.use(express.json({ limit: "1mb" }));
+app.use(requireInternalToken);
 
 // -------------------------------------------------------------
 // 💡 СИНХРОННЫЙ МАРШРУТ: /parse-demo-sync
@@ -27,15 +36,15 @@ app.post("/parse-demo-sync", async (req, res) => {
   const { fileName } = req.body;
   console.log(`📨 Received SYNC parse request for file: ${fileName}`);
 
-  if (!fileName) {
-    return res.status(400).json({
-      success: false,
-      error: "fileName is required in request body.",
-    });
+  let demoPath;
+
+  try {
+    demoPath = resolveDemoPath(SHARED_DEMOS_DIR, fileName);
+  } catch (error) {
+    return res.status(400).json({ success: false, error: error.message });
   }
 
   try {
-    const demoPath = path.join(SHARED_DEMOS_DIR, fileName);
     let fileExists = false;
     let attempts = 0;
     const maxAttempts = 5;
@@ -102,14 +111,18 @@ app.post("/parse-demo-sync", async (req, res) => {
 
 app.post("/parse-demo", async (req, res) => {
   const { fileName, callbackUrl } = req.body;
-  console.log(callbackUrl, "a");
   console.log(`📨 Received parse request for file: ${fileName}`);
 
-  if (!fileName) {
-    return res.status(400).json({
-      success: false,
-      error: "fileName is required",
-    });
+  // Оба поля из тела запроса валидируем ДО ответа, чтобы вызывающий получил
+  // внятную 400, а не «принято» с последующим молчаливым падением.
+  let demoPath;
+  let safeCallbackUrl = null;
+
+  try {
+    demoPath = resolveDemoPath(SHARED_DEMOS_DIR, fileName);
+    if (callbackUrl) safeCallbackUrl = assertAllowedCallbackUrl(callbackUrl);
+  } catch (error) {
+    return res.status(400).json({ success: false, error: error.message });
   }
 
   // Немедленный ответ
@@ -119,8 +132,6 @@ app.post("/parse-demo", async (req, res) => {
   });
 
   try {
-    // ✅ Строим правильный путь к файлу
-    const demoPath = path.join(SHARED_DEMOS_DIR, fileName);
     console.log(`🔍 Looking for file: ${demoPath}`);
 
     // Проверяем что файл существует
@@ -185,9 +196,9 @@ app.post("/parse-demo", async (req, res) => {
       archiveService.cleanupTempFile(actualDemoPath);
     }
     // Отправляем callback
-    if (callbackUrl) {
+    if (safeCallbackUrl) {
       console.log("📤 Sending callback...");
-      await sendCallbackWithRetry(callbackUrl, {
+      await sendCallbackWithRetry(safeCallbackUrl, {
         success: true,
         data: parsedData,
       });
@@ -197,8 +208,8 @@ app.post("/parse-demo", async (req, res) => {
   } catch (error) {
     console.error(`❌ Parse failed: ${error.message}`);
 
-    if (callbackUrl) {
-      await sendCallbackWithRetry(callbackUrl, {
+    if (safeCallbackUrl) {
+      await sendCallbackWithRetry(safeCallbackUrl, {
         success: false,
         error: error.message,
       });
@@ -206,30 +217,60 @@ app.post("/parse-demo", async (req, res) => {
   }
 });
 
+// Задержки между попытками. Укладываемся примерно в 10 секунд, потому что
+// nextapp ждёт callback не дольше 60 секунд — ретраи дольше этого бессмысленны.
+const CALLBACK_RETRY_DELAYS_MS = [1000, 3000, 6000];
+
 async function sendCallbackWithRetry(callbackUrl, data, maxRetries = 3) {
-  console.log(callbackUrl);
+  const attempts = Math.min(maxRetries, CALLBACK_RETRY_DELAYS_MS.length + 1);
 
-  try {
-    console.log(`📞 Sending callback...`);
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      console.log(`📞 Sending callback (попытка ${attempt}/${attempts})...`);
 
-    const response = await fetch(callbackUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-      timeout: 10000,
-    });
+      const response = await fetch(callbackUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          // Тот же секрет, что и во входящих запросах: nextapp принимает
+          // результаты парсинга только от парсера.
+          "x-internal-token": process.env.INTERNAL_SERVICE_TOKEN || "",
+        },
+        body: JSON.stringify(data),
+        // У fetch нет опции timeout — нужен AbortSignal, иначе запрос висит вечно.
+        signal: AbortSignal.timeout(10000),
+      });
 
-    if (response.ok) {
-      console.log("✅ Callback sent successfully");
-      return;
-    } else {
-      console.log(
-        `⚠️ Callback failed with status ${response.status}, retrying...`
-      );
+      if (response.ok) {
+        console.log("✅ Callback sent successfully");
+        return true;
+      }
+
+      // 4xx (кроме 429) — постоянная ошибка: неверный токен или битый URL.
+      // Повторять бессмысленно, только зря потратим окно ожидания.
+      if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+        console.error(
+          `❌ Callback отклонён навсегда: ${response.status}. Проверь INTERNAL_SERVICE_TOKEN.`
+        );
+        return false;
+      }
+
+      console.log(`⚠️ Callback failed with status ${response.status}`);
+    } catch (error) {
+      console.log(`⚠️ Callback failed: ${error.message}`);
     }
-  } catch (error) {
-    console.log(`⚠️ Callback failed: ${error.message}`);
+
+    if (attempt < attempts) {
+      const delay = CALLBACK_RETRY_DELAYS_MS[attempt - 1];
+      console.log(`⏳ Повтор через ${delay} мс...`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
   }
+
+  console.error(
+    `❌ Callback не доставлен за ${attempts} попыток — результат парсинга потерян`
+  );
+  return false;
 }
 
 app.get("/debug/files", async (req, res) => {
@@ -261,6 +302,12 @@ app.get("/debug/files", async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Demo parsing server running on port ${PORT}`);
+app.listen(PORT, BIND_HOST, () => {
+  console.log(`🚀 Demo parsing server running on ${BIND_HOST}:${PORT}`);
+
+  if (BIND_HOST !== "127.0.0.1" && BIND_HOST !== "localhost") {
+    console.warn(
+      `⚠️  Парсер слушает ${BIND_HOST} — убедись, что порт закрыт файрволом снаружи`
+    );
+  }
 });

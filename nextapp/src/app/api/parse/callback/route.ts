@@ -2,11 +2,20 @@
 
 import { databaseService } from "@/services/server/server-parse-services/database-service";
 import { prismaSessionStore } from "@/services/server/server-parse-services/prisma-session-store";
+import { isValidInternalRequest } from "@/lib/auth/internal";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
+  // Этот роут пишет результаты парсинга прямо в таблицы матчей. Без проверки
+  // секрета кто угодно мог бы прислать выдуманную статистику турнира.
+  if (!isValidInternalRequest(request)) {
+    console.warn("Rejected parse callback: invalid internal token");
+
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
-    const { sessionId, matchUrl, tournamentId } = await getParams(request);
+    const { sessionId, matchUrl, tournamentId } = getParams(request);
     const result = await request.json();
 
     console.log(`📨 Callback received for ${matchUrl}`);
@@ -44,7 +53,7 @@ export async function POST(request: NextRequest) {
 
     // Даже при ошибке сохраняем статус
     try {
-      const { sessionId, matchUrl } = await getParams(request);
+      const { sessionId, matchUrl } = getParams(request);
       await prismaSessionStore.updateMatchProgress(sessionId, matchUrl, {
         status: "error",
         error: `Database save failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -57,8 +66,9 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// lib/params-helper.ts
-export async function getParams(request: NextRequest) {
+// Не экспортируется: route-файл может отдавать наружу только обработчики
+// HTTP-методов и служебные настройки, иначе сборка Next падает на проверке типов.
+function getParams(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const sessionId = searchParams.get("sessionId");
   const matchUrl = searchParams.get("matchUrl");

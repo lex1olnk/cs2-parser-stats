@@ -7,13 +7,29 @@ function parseAllData(demoPath) {
 
   try {
     const matchInfo = parseMatchInfo(demoPath);
-    const players = parsePlayersInfo(demoPath);
-    const rounds = parseRoundsInfo(demoPath);
+    let players = parsePlayersInfo(demoPath);
+    let rounds = parseRoundsInfo(demoPath);
+
+    // Привязка steamId -> команда (A/B) по составу первого пистолетного раунда.
+    // Решает проблему half-time swap: "сторона T" во второй половине это другая команда.
+    const teamAssignment = assignTeamsByFirstRound(demoPath, players, rounds);
+    players = players.map((p) => ({
+      ...p,
+      teamLabel: teamAssignment.steamIdToLabel.get(p.steamId) || null,
+      startSide: teamAssignment.labelToStartSide[
+        teamAssignment.steamIdToLabel.get(p.steamId)
+      ] || null,
+    }));
+    rounds = rounds.map((r) => ({
+      ...r,
+      winnerTeamLabel: resolveRoundWinnerLabel(r, teamAssignment),
+    }));
+
     const kills = parseKillsInfo(demoPath);
     const damages = parseDamagesInfo(demoPath, players);
     const grenades = parseGrenadesInfo(demoPath);
     const clutches = parseClutches(demoPath, rounds, kills);
-    const teams = parseTeamsInfo(players);
+    const teams = parseTeamsInfo(players, rounds, teamAssignment);
 
     const economies = parseRoundStartEquipment(demoPath);
     const blinds = parseBlindEvents(demoPath);
@@ -36,6 +52,126 @@ function parseAllData(demoPath) {
     console.error(`❌ Demo parsing failed: ${error.message}`);
     throw error;
   }
+}
+
+// -----------------------------------------------------------------------------
+// Привязка игроков к командам (A/B) через snapshot первого реального раунда
+// -----------------------------------------------------------------------------
+
+// Возвращает: { steamIdToLabel: Map<steamId,"A"|"B">, labelToStartSide: {A:2|3, B:2|3} }
+// где startSide — это team_num (2=T, 3=CT) на тике начала первого пистолетного раунда.
+function assignTeamsByFirstRound(demoPath, players, rounds) {
+  console.log("🪪 Assigning teams by first-round snapshot...");
+
+  const steamIdToLabel = new Map();
+  const labelToStartSide = { A: null, B: null };
+
+  // Берём тик начала самого раннего раунда с roundNumber === 1.
+  // parseRoundsInfo уже отфильтровал ножевые (roundNumber > 0).
+  const firstRound = rounds.find((r) => r.roundNumber === 1) || rounds[0];
+  if (!firstRound) {
+    console.warn("⚠️ assignTeamsByFirstRound: no rounds available");
+    return { steamIdToLabel, labelToStartSide };
+  }
+
+  // tick — это тик round_end первого раунда, нам нужен старт. Берём чуть после freeze.
+  // Безопаснее всего — взять round_start_time + небольшое смещение.
+  // Используем тик из самого первого round_start, который parseRoundStartEquipment уже умеет находить.
+  const roundStartEvents = demoparser.parseEvent(demoPath, "round_start", [
+    "total_rounds_played",
+    "tick",
+    "round_start_time",
+  ]);
+  // Из round_start выбираем самое позднее событие с total_rounds_played === 0 (это пистолетный, не ножевой).
+  const zeroEvents = roundStartEvents.filter(
+    (e) => e.total_rounds_played === 0
+  );
+  if (zeroEvents.length === 0) {
+    console.warn("⚠️ assignTeamsByFirstRound: no round_start events for pistol");
+    return { steamIdToLabel, labelToStartSide };
+  }
+  const pistolStartTick = Math.max(...zeroEvents.map((e) => e.tick)) + 64; // +1 сек после старта, состав уже стабильный
+
+  const snapshot = demoparser.parseTicks(
+    demoPath,
+    ["steamid", "team_num"],
+    [pistolStartTick]
+  );
+
+  // Группируем по стороне
+  const sideToSteamIds = { 2: [], 3: [] };
+  snapshot.forEach((p) => {
+    if (p.team_num === 2 || p.team_num === 3) {
+      sideToSteamIds[p.team_num].push(p.steamid);
+    }
+  });
+
+  if (sideToSteamIds[2].length === 0 || sideToSteamIds[3].length === 0) {
+    console.warn(
+      "⚠️ assignTeamsByFirstRound: snapshot incomplete, falling back to players[].teamNumber"
+    );
+    // Fallback: используем то, что есть в parsePlayerInfo (вряд ли верно, но лучше чем ничего)
+    players.forEach((p) => {
+      const label = p.teamNumber === 2 ? "A" : "B";
+      steamIdToLabel.set(p.steamId, label);
+    });
+    labelToStartSide.A = 2;
+    labelToStartSide.B = 3;
+    return { steamIdToLabel, labelToStartSide };
+  }
+
+  // Команда A = стартовала на T (team_num=2), команда B = стартовала на CT (team_num=3).
+  // Это произвольный выбор; важно лишь что он стабилен.
+  sideToSteamIds[2].forEach((sid) => steamIdToLabel.set(sid, "A"));
+  sideToSteamIds[3].forEach((sid) => steamIdToLabel.set(sid, "B"));
+  labelToStartSide.A = 2;
+  labelToStartSide.B = 3;
+
+  console.log(
+    `   Team A (started T): ${sideToSteamIds[2].length} players, Team B (started CT): ${sideToSteamIds[3].length} players`
+  );
+
+  return { steamIdToLabel, labelToStartSide };
+}
+
+// Для раунда определяем, какая команда (A/B) выиграла.
+// Формат: round.winner = "T" | "CT" (сторона). Нужно знать, какая команда играла за эту сторону в этом раунде.
+//
+// MR12 (24 раунда + OT):
+//   раунды 1..12  → стороны как на старте
+//   раунды 13..24 → swap
+//   раунды 25+    → OT, swap каждые 3 раунда начиная с 25 (доп.правило, может варьироваться)
+//
+// Для надёжности: если round.winner === "T" (сторона 2), то выиграла команда,
+// чей стартовый side совпадает с 2 в данный момент — определяется по чётности половины.
+function resolveRoundWinnerLabel(round, teamAssignment) {
+  if (!round || !round.winner) return null;
+  const { labelToStartSide } = teamAssignment;
+  if (!labelToStartSide.A || !labelToStartSide.B) return null;
+
+  const winnerSide = round.winner === "T" ? 2 : 3;
+  const sideOfA = sideOfTeamInRound("A", round.roundNumber, labelToStartSide);
+  return sideOfA === winnerSide ? "A" : "B";
+}
+
+// Возвращает текущую сторону (2 или 3) команды в раунде с учётом swap.
+function sideOfTeamInRound(label, roundNumber, labelToStartSide) {
+  const startSide = labelToStartSide[label];
+  const otherSide = startSide === 2 ? 3 : 2;
+  const swapped = isSideSwappedInRound(roundNumber);
+  return swapped ? otherSide : startSide;
+}
+
+// MR12 правило swap. Можно вынести в конфиг, если появятся другие форматы (MR15 и т.д.).
+function isSideSwappedInRound(roundNumber) {
+  // Регулярка: первая половина 1..12 — не swap, 13..24 — swap.
+  if (roundNumber <= 12) return false;
+  if (roundNumber <= 24) return true;
+  // OT: раунды 25.. идут блоками по 3, начиная с обратной стороны второй половины.
+  // То есть 25..27 = не swap (как 1..12), 28..30 = swap, и т.д.
+  const otRound = roundNumber - 25; // 0-based позиция в OT
+  const block = Math.floor(otRound / 3);
+  return block % 2 === 1;
 }
 
 // 1. Информация о матче
@@ -303,26 +439,43 @@ function parseGrenadesInfo(demoPath) {
   return allGrenades;
 }
 
-// 7. Команды (на основе игроков)
-function parseTeamsInfo(players) {
+// 7. Команды — формируются из лейблов A/B (зафиксированы по составу первого раунда).
+//    Счёт считается по winnerTeamLabel раундов, а не по сторонам T/CT.
+function parseTeamsInfo(players, rounds, teamAssignment) {
   console.log("🏆 Parsing teams...");
 
-  const teams = {};
+  const { labelToStartSide } = teamAssignment || { labelToStartSide: {} };
+  const scoreByLabel = { A: 0, B: 0 };
+  (rounds || []).forEach((r) => {
+    if (r.winnerTeamLabel === "A") scoreByLabel.A++;
+    else if (r.winnerTeamLabel === "B") scoreByLabel.B++;
+  });
 
-  players.forEach((player) => {
-    if (player.teamNumber) {
-      if (!teams[player.teamNumber]) {
-        teams[player.teamNumber] = {
-          teamNumber: player.teamNumber,
-          name: `Team ${player.teamNumber === 2 ? "A" : "B"}`,
-          players: [],
-        };
-      }
-      teams[player.teamNumber].players.push(player.steamId);
+  const groups = { A: [], B: [] };
+  players.forEach((p) => {
+    if (p.teamLabel === "A" || p.teamLabel === "B") {
+      groups[p.teamLabel].push(p.steamId);
     }
   });
 
-  return Object.values(teams);
+  const winnerLabel =
+    scoreByLabel.A === scoreByLabel.B
+      ? null
+      : scoreByLabel.A > scoreByLabel.B
+      ? "A"
+      : "B";
+
+  const teams = ["A", "B"].map((label) => ({
+    label,                              // "A" | "B" — стабильный ID команды в матче
+    name: `Team ${label}`,
+    startSide: labelToStartSide[label], // 2 (T) или 3 (CT) — стартовая сторона
+    teamNumber: labelToStartSide[label], // для обратной совместимости (= startSide)
+    players: groups[label],
+    score: scoreByLabel[label],
+    isWinner: winnerLabel === label,
+  }));
+
+  return teams;
 }
 
 const getSideNumber = (ch) => (ch === "CT" ? 3 : 2);

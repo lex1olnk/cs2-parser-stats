@@ -1,5 +1,4 @@
 // lib/prisma-session-store.ts
-import { PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ProcessingSession } from "@/types/demo-processing";
 

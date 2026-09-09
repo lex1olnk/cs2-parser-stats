@@ -34,8 +34,8 @@ export const VerticalMatchSection = () => {
       .catch(console.error);
   }, [activeTournamentId]);
 
-  const y = useTransform(activeProgress, [0.75, 0.9], ["0px", "-1200px"]);
-  const indicatorY = useTransform(activeProgress, [0.75, 0.9], ["0%", "100%"]);
+  const y = useTransform(activeProgress, [0.80, 0.95], ["0px", "-1200px"]);
+  const indicatorY = useTransform(activeProgress, [0.80, 0.95], ["0%", "100%"]);
 
   return (
     <div className="relative h-full w-screen bg-[#0a0a0a] overflow-hidden border-l border-zinc-900 font-mono snap-start">

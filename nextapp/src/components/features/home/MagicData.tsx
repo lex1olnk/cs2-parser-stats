@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { motion, useTransform, useMotionValue } from "framer-motion";
 import { useStore } from "@/store";
 
 interface TournamentStats {
@@ -13,7 +14,12 @@ interface TournamentStats {
 export const MagicData = () => {
   const activeTournamentId = useStore((state) => state.activeTournamentId);
   const tournaments = useStore((state) => state.tournaments);
+  const scrollProgress = useStore((state) => state.scrollYProgress);
+  const fallback = useMotionValue(0);
+  const activeProgress = scrollProgress ?? fallback;
   const [stats, setStats] = useState<TournamentStats | null>(null);
+
+  const y = useTransform(activeProgress, [0.55, 0.70], ["0px", "-400px"]);
 
   useEffect(() => {
     if (!activeTournamentId) return;
@@ -46,7 +52,7 @@ export const MagicData = () => {
       </div>
 
       {/* UI ЭЛЕМЕНТЫ ПО СЕТКЕ */}
-      <div className="relative z-10 w-full h-full grid grid-cols-12 grid-rows-6 p-12">
+      <motion.div style={{ y }} className="relative z-10 w-full h-full grid grid-cols-12 grid-rows-6 p-12">
         {/* Tournament Info (Top Left) */}
         <div className="col-start-2 row-start-1 mt-4">
           <div className="bg-zinc-800/40 w-16 h-16 mb-4 border border-zinc-700" />
@@ -103,7 +109,7 @@ export const MagicData = () => {
           <div className="text-zinc-800 text-4xl font-light select-none">✕</div>
           <div className="text-white text-4xl font-light select-none">✕</div>
         </div>
-      </div>
+      </motion.div>
 
       <div className="absolute top-[20%] left-[15%] w-40 h-40 border border-white/5 -z-10" />
       <div className="absolute bottom-[10%] left-[45%] w-60 h-80 bg-white/5 border border-white/5 -z-10" />

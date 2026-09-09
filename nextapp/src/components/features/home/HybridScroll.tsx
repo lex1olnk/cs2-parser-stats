@@ -28,10 +28,12 @@ export function HybridScroll({ children }: { children: React.ReactNode }) {
     setActiveSection(sectionIndex);
   });
 
+  // Прогресс → X (горизонтальный сдвиг)
+  // Паузы: 0.30-0.45 (Draft), 0.55-0.70 (MagicData), 0.80-0.95 (MatchList)
   const x = useTransform(
     scrollYProgress,
-    [0, 0.75, 0.9, 1],
-    ["0vw", "-400vw", "-400vw", "-400vw"],
+    [0,      0.20,      0.30,      0.45,      0.55,      0.70,      0.80,      0.95,     1.0],
+    ["0vw", "-100vw", "-200vw", "-200vw", "-300vw", "-300vw", "-400vw", "-400vw", "-400vw"],
   );
 
   return (

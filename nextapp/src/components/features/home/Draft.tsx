@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { motion, useTransform, useMotionValue } from "framer-motion";
 import { useStore } from "@/store";
 
 interface Participant {
@@ -17,43 +18,56 @@ interface Team {
 
 export const Draft = () => {
   const activeTournamentId = useStore((state) => state.activeTournamentId);
+  const scrollProgress = useStore((state) => state.scrollYProgress);
+  const fallback = useMotionValue(0);
+  const activeProgress = scrollProgress ?? fallback;
+
   const [teams, setTeams] = useState<Team[]>([]);
 
   useEffect(() => {
     if (!activeTournamentId) return;
-
     fetch(`/api/tournaments/${activeTournamentId}`)
       .then((r) => r.json())
       .then((data) => setTeams(data.teams ?? []))
       .catch(console.error);
   }, [activeTournamentId]);
 
+  // Внутренний вертикальный скролл пока Draft в паузе (0.30 → 0.45)
+  const y = useTransform(activeProgress, [0.30, 0.45], ["0px", "-900px"]);
+
   return (
-    <section className="relative min-h-screen w-full bg-[#0a0a0a] py-24 overflow-hidden border-t border-zinc-900">
-      <div className="container mx-auto px-6">
-        <div className="flex justify-between items-end mb-16 border-b border-zinc-800 pb-8">
-          <div>
-            <p className="text-[10px] tracking-[0.4em] text-white/40 mb-2 uppercase">
-              // Logic: Draft_Sequence_v4
-            </p>
+    <div className="relative h-full w-full overflow-hidden bg-[#0a0a0a] border-l border-zinc-900">
+      {/* Фиксированный заголовок */}
+      <div className="absolute top-0 left-0 w-full z-30 bg-[#0a0a0a]">
+        <div className="px-12 pt-12 pb-6">
+          <p className="text-[10px] tracking-[0.4em] text-white/40 mb-2 uppercase">
+            // Logic: Draft_Sequence_v4
+          </p>
+          <div className="flex justify-between items-end border-b border-zinc-800 pb-6">
             <h2 className="text-6xl font-black tracking-tighter uppercase">
               Team_Assembly
             </h2>
-          </div>
-          <div className="text-right hidden md:block">
-            <p className="text-[40px] font-light leading-none">
-              {teams.length > 0 ? teams.length.toString().padStart(2, "0") : "—"}
-            </p>
-            <p className="text-[10px] tracking-widest text-zinc-600 uppercase">
-              Teams
-            </p>
+            <div className="text-right hidden md:block">
+              <p className="text-[40px] font-light leading-none">
+                {teams.length > 0
+                  ? teams.length.toString().padStart(2, "0")
+                  : "—"}
+              </p>
+              <p className="text-[10px] tracking-widest text-zinc-600 uppercase">
+                Teams
+              </p>
+            </div>
           </div>
         </div>
+        <div className="h-16 w-full bg-linear-to-b from-[#0a0a0a] to-transparent" />
+      </div>
 
+      {/* Скроллящийся контент */}
+      <motion.div style={{ y }} className="px-12 pt-64 pb-96">
         {teams.length === 0 ? (
-          <div className="text-zinc-700 font-mono text-xs tracking-widest uppercase">
+          <p className="text-zinc-700 font-mono text-xs tracking-widest uppercase pt-8">
             {activeTournamentId ? "Loading_Teams..." : "No_Tournament_Selected"}
-          </div>
+          </p>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-1">
             {teams.map((team) => (
@@ -104,11 +118,11 @@ export const Draft = () => {
             ))}
           </div>
         )}
+      </motion.div>
 
-        <div className="absolute -bottom-10 -left-10 text-[15rem] font-black text-white/[0.02] pointer-events-none select-none">
-          DRAFT
-        </div>
+      <div className="absolute bottom-10 left-10 text-[12rem] font-black text-white/2 pointer-events-none select-none uppercase italic">
+        DRAFT
       </div>
-    </section>
+    </div>
   );
 };

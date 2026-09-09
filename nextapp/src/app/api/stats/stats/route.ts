@@ -1,6 +1,9 @@
-// app/api/stats/clutch/route.ts
+// app/api/stats/stats/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,10 +18,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Добавляем задержку для тестирования Suspense
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    if (!tournamentId || !UUID_REGEX.test(tournamentId)) {
+      return NextResponse.json(
+        { error: "tournamentId must be a UUID" },
+        { status: 400 },
+      );
+    }
 
-    const entryResult: any = await prisma.$queryRaw`
+    const entryRows: Array<{ fk: bigint | null; fd: bigint | null }> =
+      await prisma.$queryRaw`
          with cte as (
               select *
                 from match_kill mk
@@ -175,10 +183,11 @@ export async function GET(request: NextRequest) {
                where player_id = ${playerId}
                  and tournament_id = ${tournamentId}::uuid
                group by player_id`;
-    // Трансформируем данные в удобный формат
+    // $queryRaw всегда возвращает массив строк — раньше поля читались прямо
+    // с массива и превращались в NaN.
     const entry = {
-      firstKills: Number(entryResult.fk),
-      firstDeath: Number(entryResult.fd),
+      firstKills: Number(entryRows[0]?.fk ?? 0),
+      firstDeath: Number(entryRows[0]?.fd ?? 0),
     };
 
     const basic = playerStatsResult.map((res) => ({
@@ -200,7 +209,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (e) {
-    console.error("Clutch stats error:", e);
+    console.error("Player stats error:", e);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

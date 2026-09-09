@@ -46,13 +46,31 @@ const nextConfig: NextConfig = {
         pathname: "/avatars/**",
         search: "",
       },
+      // Аватары из Steam — приходят при логине через Steam Web API.
+      {
+        protocol: "https",
+        hostname: "avatars.steamstatic.com",
+        port: "",
+        pathname: "/**",
+        search: "",
+      },
+      {
+        protocol: "https",
+        hostname: "avatars.cloudflare.steamstatic.com",
+        port: "",
+        pathname: "/**",
+        search: "",
+      },
     ],
   },
-  // Отключаем проверку типов во время сборки для ускорения
+  // Проверка типов включена: сейчас ошибок нет, и пусть сборка падает,
+  // если они появятся.
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
-  // Отключаем ESLint во время сборки
+  // ESLint пока вне сборки: в коде ~130 накопленных замечаний
+  // (в основном any в парсере и неиспользуемые импорты). Разгребается
+  // отдельно, см. plan.md; проверять руками — npm run lint.
   eslint: {
     ignoreDuringBuilds: true,
   },

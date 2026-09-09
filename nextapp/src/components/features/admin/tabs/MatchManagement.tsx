@@ -7,6 +7,7 @@ import {
   ProcessingSession,
 } from "@/components/features/admin/UI/SessionItem";
 import { MatchFilters } from "@/components/features/admin/UI/MatchFilters";
+import { LocalDemoImport } from "@/components/features/admin/UI/LocalDemoImport";
 import { MatchCard } from "@/components/features/admin/UI/MatchCard";
 import { LoadingState } from "@/components/features/admin/UI/LoadingState";
 import { ErrorState } from "@/components/features/admin/UI/ErrorState";
@@ -151,6 +152,11 @@ export const MatchManagement: React.FC = () => {
       <Header
         onAddMatch={() => setShowMatchForm(true)}
         onRefresh={handleForceRefresh}
+      />
+
+      <LocalDemoImport
+        tournaments={tournaments || []}
+        onImportStarted={handleForceRefresh}
       />
 
       <ActiveSessions

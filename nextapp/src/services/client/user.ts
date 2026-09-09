@@ -30,8 +30,6 @@ export const getProfilesCount = async (): Promise<number> => {
 export const addProfiles = async (
   data: {
     name: string;
-    email: string | null;
-    faceitLink: string | null;
     users: {
       id: number;
       nickname: string;

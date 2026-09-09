@@ -50,7 +50,9 @@ function calculatePlayerStats(players, kills, damages, rounds, clutches) {
       roundsWithKill: new Set(), // Для KAST
       roundsWithAssist: new Set(), // Для KAST
       roundsSurvived: new Set(), // Для KAST
-      roundsWithTrade: new Set(), // Для KAST (damageGiven, не учитывается в классике)
+      roundsWithTrade: new Set(), // Для KAST
+      roundsWithMultiKill: new Set(), // Для HLTV Rating 1.0 (RMK)
+      killsPerRound: {}, // временный счётчик kills по roundNum
     });
   });
 
@@ -64,6 +66,8 @@ function calculatePlayerStats(players, kills, damages, rounds, clutches) {
     if (attackerStats) {
       attackerStats.kills++;
       attackerStats.roundsWithKill.add(kill.round);
+      attackerStats.killsPerRound[kill.round] =
+        (attackerStats.killsPerRound[kill.round] || 0) + 1;
     }
 
     // Headshots
@@ -94,39 +98,57 @@ function calculatePlayerStats(players, kills, damages, rounds, clutches) {
   });
 
   // --- 3. KAST (Участие в раундах) ---
-  // R - rounds with kill, assist, survive, or trade/damage.
-  // Классический KAST: (K + A + S + T) / Total Rounds
-  // S (Survived) и T (Traded)
+  // Классический KAST: доля раундов, где игрок получил Kill, Assist, Survived или был Traded.
+  // S (Survived): игрок не умер в раунде — независимо от исхода раунда.
+  // T (Traded): игрок умер, но союзник убил его убийцу в течение ~5 секунд (HLTV-конвенция).
+
+  // Индекс смертей: steamId+round -> {killerSteamId, tick, teamNumber}
+  const deathsByPlayerRound = new Map();
+  kills.forEach((kill) => {
+    if (!kill.victimSteamId) return;
+    deathsByPlayerRound.set(`${kill.victimSteamId}__${kill.round}`, {
+      killerSteamId: kill.attackerSteamId,
+      tick: kill.tick,
+    });
+  });
+
+  // Команды игроков для проверки союзников при trade
+  const playerTeam = new Map();
+  players.forEach((p) => playerTeam.set(p.steamId, p.teamNumber));
+
+  // CS2 ~64 тика/сек; окно HLTV для trade ≈ 5 секунд
+  const TRADE_TICK_WINDOW = 64 * 5;
+
   rounds.forEach((round) => {
     const roundNum = round.roundNumber;
-    const winningTeamNum = getTeamName(round.winner) === "T" ? 2 : 3;
 
     players.forEach((player) => {
       const stats = playerStatsMap.get(player.steamId);
       if (!stats) return;
 
-      // Если игрок получил убийство или ассист, он уже в KAST
-      if (
-        stats.roundsWithKill.has(roundNum) ||
-        stats.roundsWithAssist.has(roundNum)
-      ) {
+      // Survive: игрок не умер в этом раунде
+      const death = deathsByPlayerRound.get(`${player.steamId}__${roundNum}`);
+      if (!death) {
+        stats.roundsSurvived.add(roundNum);
         return;
       }
 
-      // Проверка на Survive (S): Игрок выжил в раунде, который выиграла его команда.
-      if (player.teamNumber === winningTeamNum) {
-        // Если игрок не умер в этом раунде, и его команда выиграла
-        const diedInRound = kills.some(
-          (k) => k.victimSteamId === player.steamId && k.round === roundNum
-        );
-        if (!diedInRound) {
-          stats.roundsSurvived.add(roundNum);
-        }
-      }
+      // Trade: убийца игрока сам был убит союзником в окне TRADE_TICK_WINDOW
+      const killerOfPlayer = death.killerSteamId;
+      if (!killerOfPlayer) return;
 
-      // Проверка на Trade (T): (Сложно реализовать без tick/time логики).
-      // В нашей упрощенной модели KAST будем считать, что Kills, Assists и Survived дают основной вклад.
-      // Для упрощения, пока игнорируем "Trade" как отдельный элемент и фокусируемся на K, A, S.
+      const traded = kills.some(
+        (k) =>
+          k.round === roundNum &&
+          k.victimSteamId === killerOfPlayer &&
+          k.tick >= death.tick &&
+          k.tick - death.tick <= TRADE_TICK_WINDOW &&
+          k.attackerSteamId &&
+          k.attackerSteamId !== player.steamId &&
+          playerTeam.get(k.attackerSteamId) === player.teamNumber
+      );
+
+      if (traded) stats.roundsWithTrade.add(roundNum);
     });
   });
 
@@ -143,21 +165,50 @@ function calculatePlayerStats(players, kills, damages, rounds, clutches) {
     stats.HSPercent =
       stats.kills > 0 ? Math.round((stats.headshots / stats.kills) * 100) : 0;
 
-    // KASTPercent
+    // Multi-kill rounds (RMK для HLTV Rating 1.0): раунды с >=2 убийствами
+    Object.entries(stats.killsPerRound).forEach(([roundNum, n]) => {
+      if (n >= 2) stats.roundsWithMultiKill.add(Number(roundNum));
+    });
+    stats.multiKillRounds = stats.roundsWithMultiKill.size;
+    stats.survivedRounds = stats.roundsSurvived.size;
+    stats.tradedRounds = stats.roundsWithTrade.size;
+
+    // KASTPercent (K + A + S + T)
     const totalKastRounds = new Set([
       ...stats.roundsWithKill,
       ...stats.roundsWithAssist,
       ...stats.roundsSurvived,
+      ...stats.roundsWithTrade,
     ]).size;
-
     stats.KASTPercent =
       totalRounds > 0 ? Math.round((totalKastRounds / totalRounds) * 100) : 0;
+
+    // HLTV Rating 1.0 (Per-Round Performance Rating)
+    // Формула: 0.3591*KPR + 0.4778*SPR + 0.3658*RMK − 0.3940*DPR + 0.2778
+    // где KPR=kills/round, SPR=survived/round, RMK=multiKill/round, DPR=deaths/round
+    if (totalRounds > 0) {
+      const KPR = stats.kills / totalRounds;
+      const SPR = stats.survivedRounds / totalRounds;
+      const RMK = stats.multiKillRounds / totalRounds;
+      const DPR = stats.deaths / totalRounds;
+      stats.HLTVRating = +(
+        0.3591 * KPR +
+        0.4778 * SPR +
+        0.3658 * RMK -
+        0.394 * DPR +
+        0.2778
+      ).toFixed(3);
+    } else {
+      stats.HLTVRating = 0;
+    }
 
     // Удаляем временные наборы
     delete stats.roundsWithKill;
     delete stats.roundsWithAssist;
     delete stats.roundsSurvived;
     delete stats.roundsWithTrade;
+    delete stats.roundsWithMultiKill;
+    delete stats.killsPerRound;
   });
 
   return playerStatsMap;

@@ -48,9 +48,6 @@ const ParticipantList: React.FC = () => {
                       <div className="text-sm font-medium text-gray-900">
                         {participant.profile.name}
                       </div>
-                      <div className="text-sm text-gray-500">
-                        {participant.profile.email}
-                      </div>
                     </div>
                   </div>
                 </td>
