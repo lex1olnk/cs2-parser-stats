@@ -1,5 +1,5 @@
 import React from "react";
-import { Match, MatchNew } from "@/types";
+import { MatchNew } from "@/types";
 
 interface MatchCardProps {
   match: MatchNew;

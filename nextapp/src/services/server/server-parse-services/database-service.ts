@@ -3,6 +3,37 @@ import { prisma } from "@/lib/prisma";
 // Prisma 7 не реэкспортирует модели из "@prisma/client" — типы моделей
 // берутся из сгенерированного клиента.
 import { Prisma, PrismaClient, Weapon } from "@/../prisma/generated/client";
+import { downloadService, type MatchMeta } from "./download-service";
+import type {
+  ParsedBlind,
+  ParsedClutch,
+  ParsedDamage,
+  ParsedDemo,
+  ParsedGrenade,
+  ParsedKill,
+  ParsedMatchInfo,
+  ParsedPlayer,
+  ParsedRound,
+  ParsedRoundEconomy,
+  ParsedTeam,
+} from "@/types/parsed-demo";
+
+/**
+ * Карты, которыми связываются данные парсера и строки БД. Раньше все три
+ * были Map<any, any>, и перепутанные ключи стоили двух багов: состав уезжал
+ * в чужую команду, а экономика — в соседний раунд.
+ */
+/** steamId игрока -> User.id */
+type PlayersMap = Map<string, number>;
+/** Номер раунда, как он лежит в БД -> Round.id */
+type RoundsMap = Map<number, string>;
+/** Сторона (2/3) или метка команды ("A"/"B") -> MatchTeam.id */
+type TeamsMap = Map<string | number, string>;
+
+/** Поиск по карте для ключей, которых может не быть в данных парсера. */
+function lookup<V>(map: Map<string, V>, key: string | null | undefined) {
+  return key == null ? undefined : map.get(key);
+}
 
 // Тип для транзакционного клиента Prisma
 type PrismaTransactionalClient = Parameters<
@@ -14,8 +45,14 @@ export class DatabaseService {
     sessionId: string,
     matchUrl: string,
     tournamentId: string | null,
-    parsedData: any
+    parsedData: ParsedDemo
   ) {
+    // Время матча и формат берём с платформы до открытия транзакции —
+    // сетевому запросу внутри неё не место. Если платформа неизвестна
+    // (локальный импорт) или запрос не удался, вернётся null и матч
+    // сохранится с прежним поведением.
+    const matchMeta = await downloadService.getMatchMeta(matchUrl);
+
     return await prisma.$transaction(async (tx) => {
       console.log("💾 Saving parsed data to database...");
 
@@ -25,7 +62,8 @@ export class DatabaseService {
         sessionId,
         matchUrl,
         tournamentId,
-        parsedData.matchInfo
+        parsedData.matchInfo,
+        matchMeta
       );
 
       // 2. Создаем команды
@@ -123,19 +161,27 @@ export class DatabaseService {
     sessionId: string,
     matchUrl: string,
     tournamentId: string | null,
-    matchInfo: any
+    matchInfo: ParsedMatchInfo,
+    matchMeta: MatchMeta | null
   ) {
+    // Даты матча есть только у платформы: в заголовке демки их нет.
+    // Без matchMeta (локальный импорт, недоступный API) остаётся прежнее
+    // поведение — время импорта.
+    const now = new Date();
+
     return await tx.match.create({
       data: {
         type: "competitive",
         status: "finished",
         demoPath: matchUrl, // или можно сохранить оригинальный demoPath
-        bestOf: 1,
-        hasWinner: true,
-        startedAt: new Date(),
-        finishedAt: new Date(),
+        bestOf: matchMeta?.bestOf ?? 1,
+        hasWinner: matchMeta?.hasWinner ?? true,
+        startedAt: matchMeta?.startedAt ?? now,
+        finishedAt: matchMeta?.finishedAt ?? now,
         tournamentId,
-        maxRoundsCount: 30,
+        // 24 раунда — это MR12, формат fastcup. Прежнее значение 30
+        // не соответствовало ни одному из разобранных матчей.
+        maxRoundsCount: matchMeta?.maxRoundsCount ?? 24,
         serverInstanceId: "demo_parser",
         isFinal: false,
         createdAt: new Date(),
@@ -146,23 +192,34 @@ export class DatabaseService {
   private async createTeams(
     tx: PrismaTransactionalClient,
     matchId: string,
-    teams: any[]
+    teams: ParsedTeam[]
   ) {
-    const teamsMap = new Map();
+    const teamsMap: TeamsMap = new Map();
 
     for (const teamData of teams) {
       const team = await tx.matchTeam.create({
         data: {
           name: teamData.name,
           size: teamData.players?.length || 0,
-          score: 0,
+          // parseTeamsInfo уже считает счёт по выигранным раундам и определяет
+          // победителя. Раньше эти поля затирались нулями, и любой матч
+          // выглядел как 0:0 без победителя — и в списке, и в /api/matches.
+          score: teamData.score ?? 0,
           teamNum: teamData.teamNumber,
-          isWinner: false,
+          isWinner: teamData.isWinner ?? false,
           captainId: 1, // или определить капитана
           matchId: matchId,
         },
       });
-      teamsMap.set(teamData.teamNumber, team.id);
+      if (teamData.teamNumber !== null && teamData.teamNumber !== undefined) {
+        teamsMap.set(teamData.teamNumber, team.id);
+      }
+      // Второй ключ — стабильная метка команды ("A"/"B") из парсера.
+      // По стороне (2/3) команду можно найти только до смены сторон,
+      // по метке — в любом раунде.
+      if (teamData.label) {
+        teamsMap.set(teamData.label, team.id);
+      }
     }
 
     return teamsMap;
@@ -171,7 +228,7 @@ export class DatabaseService {
   private async createMatchMap(
     tx: PrismaTransactionalClient,
     matchId: string,
-    matchInfo: any
+    matchInfo: ParsedMatchInfo
   ) {
     let map = await tx.map.findFirst({
       where: { name: matchInfo.mapName },
@@ -206,10 +263,10 @@ export class DatabaseService {
   private async processPlayers(
     tx: PrismaTransactionalClient,
     matchId: string,
-    players: any[],
-    teamsMap: Map<any, any>
+    players: ParsedPlayer[],
+    teamsMap: TeamsMap
   ) {
-    const playersMap = new Map();
+    const playersMap: PlayersMap = new Map();
     const membersData = [];
 
     for (const player of players) {
@@ -225,8 +282,16 @@ export class DatabaseService {
 
       playersMap.set(player.steamId, user.id);
 
-      // 2. Собираем данные для создания участника матча
-      const teamId = teamsMap.get(player.teamNumber);
+      // 2. Собираем данные для создания участника матча.
+      // Команду берём по метке из парсера. player.teamNumber — это сторона
+      // из parsePlayerInfo на один фиксированный момент, а ключи teamsMap —
+      // стартовые стороны; если сторона игрока к этому моменту успела
+      // поменяться, весь состав уезжал в команду соперника. Проверено на
+      // двух матчах: в одном привязка была верной, в другом — инвертирована
+      // целиком (135 убийств из 135 противоречили составу).
+      const teamId =
+        (player.teamLabel ? teamsMap.get(player.teamLabel) : undefined) ??
+        teamsMap.get(player.teamNumber);
       membersData.push({
         hash: `${matchId}_${user.id}`,
         role: "player",
@@ -255,15 +320,33 @@ export class DatabaseService {
     tx: PrismaTransactionalClient,
     matchId: string,
     matchMapId: string,
-    rounds: any[],
-    teamsMap: Map<any, any>
+    rounds: ParsedRound[],
+    teamsMap: TeamsMap
   ) {
-    const roundsMap = new Map();
-    const roundsData = [];
+    const roundsMap: RoundsMap = new Map();
 
     // Создаем по одному, чтобы получить ID для roundsMap
     for (const round of rounds) {
-      const winMatchTeamId = teamsMap.get(round.winner === "T" ? 2 : 3);
+      // Победителя раунда даёт winnerTeamLabel — он уже учитывает смену
+      // сторон в перерыве. Сторона (T/CT) для этого не годится: после swap
+      // за T играет уже другая команда, и раунды второй половины уезжали
+      // не тому составу (на проверенном матче — 18 раундов из 36).
+      // Ветка по стороне оставлена для данных от старого парсера, который
+      // winnerTeamLabel ещё не отдавал.
+      const winMatchTeamId =
+        (round.winnerTeamLabel
+          ? teamsMap.get(round.winnerTeamLabel)
+          : undefined) ?? teamsMap.get(round.winner === "T" ? 2 : 3);
+
+      // Команду-победителя определить не удалось — раунд без неё писать
+      // нельзя: win_match_team_id обязательный, а «какая-нибудь» команда
+      // испортит счёт. Такой раунд пропускаем с явным предупреждением.
+      if (!winMatchTeamId) {
+        console.warn(
+          `⚠️ Round ${round.roundNumber}: не удалось определить команду-победителя, раунд пропущен`
+        );
+        continue;
+      }
 
       const roundRecord = await tx.round.create({
         data: {
@@ -293,22 +376,26 @@ export class DatabaseService {
   private async processKills(
     tx: PrismaTransactionalClient,
     matchId: string,
-    kills: any[],
-    playersMap: Map<any, any>,
-    roundsMap: Map<any, any>
+    kills: ParsedKill[],
+    playersMap: PlayersMap,
+    roundsMap: RoundsMap
   ) {
     const killsData = [];
     const weaponIdsCache = new Map<string, number>();
 
     for (const kill of kills) {
-      const killerId = playersMap.get(kill.attackerSteamId);
-      const victimId = playersMap.get(kill.victimSteamId);
+      const killerId = lookup(playersMap, kill.attackerSteamId);
+      const victimId = lookup(playersMap, kill.victimSteamId);
       const assisterId = kill.assisterSteamId
-        ? playersMap.get(kill.assisterSteamId)
+        ? lookup(playersMap, kill.assisterSteamId)
         : undefined;
       const roundId = roundsMap.get(kill.round);
 
+      // attackerTeam приходит null, когда парсер не смог определить сторону
+      // убийцы. Колонка killer_team обязательная, поэтому такое убийство
+      // пропускаем — на практике это те же записи, где нет и attackerSteamId.
       if (!killerId || !victimId || !roundId) continue;
+      if (kill.attackerTeam === null) continue;
 
       let weaponId = weaponIdsCache.get(kill.weapon);
       if (!weaponId) {
@@ -325,6 +412,10 @@ export class DatabaseService {
         killerId: killerId,
         victimId: victimId,
         assistantId: assisterId,
+        assistedFlash: kill.assistedFlash ?? false,
+        swing: kill.swing ?? null,
+        isExitFrag: kill.isExitFrag ?? false,
+        isDeadRubber: kill.isDeadRubber ?? false,
         weaponId: weaponId,
         isHeadshot: kill.headshot || false,
         isWallbang: kill.wallbang || false,
@@ -357,19 +448,22 @@ export class DatabaseService {
   private async processDamages(
     tx: PrismaTransactionalClient,
     matchId: string,
-    damages: any[],
-    playersMap: Map<any, any>,
-    roundsMap: Map<any, any>
+    damages: ParsedDamage[],
+    playersMap: PlayersMap,
+    roundsMap: RoundsMap
   ) {
     const damagesData = [];
     const weaponIdsCache = new Map<string, number>();
 
     for (const damage of damages) {
-      const inflictorId = playersMap.get(damage.inflictorId);
-      const victimId = playersMap.get(damage.victimId);
+      const inflictorId = lookup(playersMap, damage.inflictorId);
+      const victimId = lookup(playersMap, damage.victimId);
       const roundId = roundsMap.get(damage.round);
 
+      // inflictorTeam приходит null, когда парсер не смог определить сторону.
+      // Колонка обязательная, поэтому такую запись урона пропускаем.
       if (!inflictorId || !victimId || !roundId) continue;
+      if (damage.inflictorTeam === null) continue;
 
       let weaponId = weaponIdsCache.get(damage.weapon);
       if (!weaponId) {
@@ -403,9 +497,9 @@ export class DatabaseService {
   private async processGrenades(
     tx: PrismaTransactionalClient,
     matchId: string,
-    grenades: any[],
-    playersMap: Map<any, any>,
-    roundsMap: Map<any, any>
+    grenades: ParsedGrenade[],
+    playersMap: PlayersMap,
+    roundsMap: RoundsMap
   ) {
     const grenadesData = [];
 
@@ -441,9 +535,9 @@ export class DatabaseService {
   private async processClutches(
     tx: PrismaTransactionalClient,
     matchId: string,
-    clutches: any[],
-    playersMap: Map<any, any>,
-    roundsMap: Map<any, any>
+    clutches: ParsedClutch[],
+    playersMap: PlayersMap,
+    roundsMap: RoundsMap
   ) {
     const clutchesData = [];
 
@@ -483,16 +577,20 @@ export class DatabaseService {
   private async processBlinds(
     tx: PrismaTransactionalClient,
     matchId: string,
-    blinds: any[],
-    playersMap: Map<any, any>,
-    roundsMap: Map<any, any>
+    blinds: ParsedBlind[],
+    playersMap: PlayersMap,
+    roundsMap: RoundsMap
   ) {
     if (!blinds) return;
 
     const data = blinds
       .map((blind) => {
-        const attackerId = playersMap.get(blind.attackerSteamId);
-        const victimId = playersMap.get(blind.victimSteamId);
+        const attackerId = lookup(playersMap, blind.attackerSteamId);
+        // parseBlindEvents отдаёт ослеплённого игрока в steamId. Поле
+        // victimSteamId в его выводе не встречается вообще, поэтому
+        // victimId всегда был undefined и фильтр ниже выбрасывал каждую
+        // строку — таблица match_blind оставалась пустой на любом матче.
+        const victimId = lookup(playersMap, blind.steamId ?? blind.victimSteamId);
         const roundId = roundsMap.get(blind.round);
 
         if (!attackerId || !victimId || !roundId) return null;
@@ -530,18 +628,9 @@ export class DatabaseService {
   private async processEconomies(
     tx: PrismaTransactionalClient,
     matchId: string,
-    economies: {
-      roundNumber: number;
-      players: {
-        steamId: string;
-        teamNum: number;
-        moneyStart: number;
-        inventory: String[];
-        tick: number;
-      }[];
-    }[],
-    playersMap: Map<string, number>, // Предполагаем string
-    roundsMap: Map<number, string> // Предполагаем number -> string
+    economies: ParsedRoundEconomy[],
+    playersMap: PlayersMap,
+    roundsMap: RoundsMap
   ): Promise<void> {
     if (!economies || economies.length === 0) return;
     const weapons = await tx.weapon.findMany({});
@@ -550,7 +639,13 @@ export class DatabaseService {
       // roundEco.players — это массив игроков для данного раунда
       if (!roundEco.players || !Array.isArray(roundEco.players)) return [];
 
-      const roundId = roundsMap.get(roundEco.roundNumber);
+      // roundsMap построен по round_end (ключ = total_rounds_played - 1),
+      // а parseRoundStartEquipment нумерует раунды от round_start
+      // (total_rounds_played + 1). Без этого -1 экономика и инвентарь
+      // уезжали на раунд вперёд: проверено на залитом матче — все 350 строк
+      // попадали в раунд, который начинается позже их собственного тика,
+      // а первый раунд оставался вообще без экономики.
+      const roundId = roundsMap.get(roundEco.roundNumber - 1);
 
       // Итерируем по каждому игроку в раунде
       return roundEco.players.map((playerEco) => {
@@ -604,7 +699,7 @@ export class DatabaseService {
     userId: number,
     roundId: string,
     economySnapshotId: string,
-    inventoryData: any[],
+    inventoryData: string[],
     weapons: Weapon[]
   ) {
     const inventoryItems = [];

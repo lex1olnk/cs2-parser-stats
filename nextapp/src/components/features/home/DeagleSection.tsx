@@ -1,5 +1,5 @@
 "use client";
-import React, { useRef, useMemo } from "react";
+import React from "react";
 import { Canvas } from "@react-three/fiber";
 import { motion, useSpring, useTransform } from "framer-motion";
 import { DeagleRotation } from "./DeagleRotation";

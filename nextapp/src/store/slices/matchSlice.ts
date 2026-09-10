@@ -1,5 +1,6 @@
 import type { StateCreator } from "zustand";
-import type { ApiState, MatchesResponse, MatchInput, MatchNew } from "@/types";
+import type { ApiState, MatchInput, MatchNew } from "@/types";
+import type { MatchQueryParams } from "@/types/match";
 import { createMatches, getMatches } from "@/services/client";
 
 interface CreateMatchData {
@@ -14,13 +15,8 @@ export interface MatchSlice extends ApiState {
     total: number;
     totalPages: number;
   };
-  filters: {
-    skip?: number;
-    take?: number;
-    include?: string;
-    orderBy?: string;
-    where?: string;
-  };
+  /** Совпадает с тем, что читает `GET /api/matches` — см. MatchQueryParams. */
+  filters: MatchQueryParams;
   recentSessionIds: string[];
   // Действия
   addMatches: (data: CreateMatchData) => Promise<void>;
@@ -56,8 +52,10 @@ export const createMatchSlice: StateCreator<MatchSlice, [], [], MatchSlice> = (
   },
 
   filters: {
-    take: 10,
-    skip: 0,
+    page: 1,
+    limit: 10,
+    sortBy: "startedAt",
+    sortOrder: "desc",
   },
 
   addRecentSession: (sessionId: string) => {
@@ -106,7 +104,7 @@ export const createMatchSlice: StateCreator<MatchSlice, [], [], MatchSlice> = (
     }
   },
   // Действия
-  fetchMatches: async (filters = { take: 10, skip: 0 }) => {
+  fetchMatches: async (filters = {}) => {
     set({ loading: true, error: null });
 
     try {
@@ -115,18 +113,9 @@ export const createMatchSlice: StateCreator<MatchSlice, [], [], MatchSlice> = (
         set({ filters: { ...get().filters, ...filters } });
       }
 
-      const currentFilters = get().filters;
-      const skip = filters.skip;
-
-      const params = {
-        skip,
-        take: filters.take,
-        include: currentFilters.include,
-        where: currentFilters.where,
-        orderBy: currentFilters.orderBy,
-      };
-
-      const response = await getMatches(params);
+      // Запрос идёт по накопленному состоянию фильтров, а не по одному
+      // переданному куску: иначе смена страницы теряла выбранный турнир.
+      const response = await getMatches(get().filters);
 
       set({
         matches: response.data,
@@ -148,17 +137,14 @@ export const createMatchSlice: StateCreator<MatchSlice, [], [], MatchSlice> = (
   },
 
   setFilters: (newFilters) => {
-    set((state) => ({
-      filters: { ...state.filters, ...newFilters },
-    }));
-
-    // Автоматически применяем фильтры с первой страницы
-    get().fetchMatches(newFilters);
+    // Смена фильтра всегда возвращает на первую страницу: иначе можно
+    // остаться на пятой там, где после отбора осталось две.
+    get().fetchMatches({ ...newFilters, page: 1 });
   },
 
   clearFilters: () => {
     set({
-      filters: {},
+      filters: { page: 1, limit: 10, sortBy: "startedAt", sortOrder: "desc" },
     });
     get().fetchMatches({});
   },

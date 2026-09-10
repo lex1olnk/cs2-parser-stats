@@ -1,12 +1,6 @@
 import { type StateCreator } from "zustand";
-import type {
-  Profile,
-  ApiState,
-  PaginationParams,
-  ProfilesResponse,
-} from "@/types";
-import { addProfiles, getProfiles, getProfilesCount } from "@/services/client";
-import { api } from "@/lib/api";
+import type { Profile, ApiState, ProfilesResponse } from "@/types";
+import { addProfiles, getProfiles } from "@/services/client";
 
 export interface ProfileSlice extends ApiState {
   profiles: Profile[];
@@ -40,7 +34,7 @@ export const createProfileSlice: StateCreator<
   [],
   [],
   ProfileSlice
-> = (set, get) => ({
+> = (set) => ({
   // Начальное состояние
   profiles: [],
 

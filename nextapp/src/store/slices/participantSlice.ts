@@ -33,7 +33,7 @@ export const createParticipantSlice: StateCreator<
   [],
   [],
   ParticipantSlice
-> = (set, get) => ({
+> = (set) => ({
   // Начальное состояние
   loading: false,
   error: null,

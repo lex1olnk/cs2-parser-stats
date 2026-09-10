@@ -30,7 +30,8 @@ export interface ProcessingProgress {
 
 export interface MatchProgress {
   url: string;
-  tournamentId?: string;
+  // Тот же тип, что у MatchInput.tournamentId: матч может быть вне турнира.
+  tournamentId?: string | null;
   // "local" — демка уже лежала в shared-demos, скачивание не выполнялось.
   platform: "fastcup" | "cybershoke" | "local";
   status: "pending" | "downloading" | "parsing" | "completed" | "error";

@@ -74,7 +74,7 @@ const ProgressBar: React.FC<ProgressBarProps> = ({
 
       {/* Детали по матчам */}
       <div className="max-h-60 overflow-y-auto">
-        {progress.matches.map((match, index) => (
+        {progress.matches.map((match) => (
           <div
             key={match.url}
             className={`border-t border-gray-100 px-4 py-3 ${

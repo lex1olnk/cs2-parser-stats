@@ -9,7 +9,8 @@ export interface MatchNew {
   };
   platform: "fastcup" | "cybershoke";
   isFinal: boolean;
-  bestOf: string;
+  // В БД это Int, роут отдаёт число как есть — тип обещал строку зря.
+  bestOf: number;
   type?: string;
   status: "pending" | "downloading" | "parsing" | "completed" | "error";
   startedAt: string;
@@ -24,6 +25,7 @@ export interface AdminMatchesResponse {
     status: null | string;
     tournamentId: null | string;
     type: null | string;
+    dateFrom: null | string;
   };
   pagination: {
     hasNext: boolean;
@@ -44,12 +46,28 @@ export interface MatchesResponse {
   take: number;
 }
 
+/**
+ * Параметры списка матчей — ровно те, что читает `GET /api/matches`.
+ *
+ * Раньше здесь были `skip`/`take`/`where`/`orderBy` в виде JSON-строк, но роут
+ * их не читает вообще: он берёт `page`/`limit` и отдельные поля фильтра.
+ * Из-за расхождения пагинация в админке не работала — кнопка «вперёд» меняла
+ * `skip`, а сервер молча отдавал ту же первую страницу.
+ *
+ * Имена полей сортировки на сервере проходят через белый список, поэтому
+ * произвольное поле сюда подставлять бессмысленно — оно молча заменится
+ * на `createdAt`.
+ */
 export interface MatchQueryParams {
-  skip?: number;
-  take?: number;
-  include?: string; // JSON string
-  where?: string; // JSON string
-  orderBy?: string; // JSON string
+  page?: number;
+  limit?: number;
+  tournamentId?: string;
+  status?: string;
+  type?: string;
+  /** Дата в формате YYYY-MM-DD; отбирает матчи, начатые не раньше неё. */
+  dateFrom?: string;
+  sortBy?: string;
+  sortOrder?: "asc" | "desc";
 }
 
 export interface MatchTeam {

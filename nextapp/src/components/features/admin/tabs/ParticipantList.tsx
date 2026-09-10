@@ -1,11 +1,20 @@
 import React from "react";
 import { useStore } from "@/store";
 
+/** Строка таблицы участников — только те поля, которые она показывает. */
+type ParticipantRow = {
+  id: string;
+  profile: { name: string };
+  team?: { name: string } | null;
+  draftOrder: number;
+};
+
 const ParticipantList: React.FC = () => {
   const setShowParticipantForm = useStore(
     (state) => state.setShowParticipantForm
   );
-  const participants: any = [];
+  // Список участников ещё не подключён к API — заглушка до реализации.
+  const participants: ParticipantRow[] = [];
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
@@ -40,7 +49,7 @@ const ParticipantList: React.FC = () => {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {participants.map((participant: any) => (
+            {participants.map((participant) => (
               <tr key={participant.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">

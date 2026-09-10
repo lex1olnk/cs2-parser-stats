@@ -4,14 +4,9 @@ import type {
   Tournament,
   WeaponStats,
 } from "@/types";
-import { api, getData } from "./api";
+import { api } from "./api";
 
 // Типы для API
-interface CreateTournamentRequest {
-  name: string;
-  status: string;
-}
-
 interface TournamentResponse {
   id: string;
   name: string;

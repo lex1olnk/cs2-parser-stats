@@ -41,13 +41,7 @@ const MatchItem: React.FC<{
   sessionId: string;
   getSessionStatusColor: (status: string) => string;
   getSessionStatusText: (status: string) => string;
-}> = ({
-  match,
-  index,
-  sessionId,
-  getSessionStatusColor,
-  getSessionStatusText,
-}) => (
+}> = ({ match, getSessionStatusColor, getSessionStatusText }) => (
   <div
     className={`flex justify-between items-center text-sm p-2 rounded transition-colors duration-300 ${
       match.status === "completed"

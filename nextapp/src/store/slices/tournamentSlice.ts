@@ -28,7 +28,7 @@ export const createTournamentSlice: StateCreator<
   [],
   [],
   TournamentSlice
-> = (set, get) => ({
+> = (set) => ({
   // Начальное состояние
   tournaments: [],
   activeTournamentId: null,

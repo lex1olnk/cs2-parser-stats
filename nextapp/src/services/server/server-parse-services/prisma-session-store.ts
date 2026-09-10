@@ -1,9 +1,20 @@
 // lib/prisma-session-store.ts
 import { prisma } from "@/lib/prisma";
-import { ProcessingSession } from "@/types/demo-processing";
+import {
+  Prisma,
+  type ProcessingSession as ProcessingSessionRow,
+} from "@/../prisma/generated/client";
+import type { MatchProgress, ProcessingSession } from "@/types/demo-processing";
+
+/** Поля сессии, которые обновляет этот сервис. */
+type SessionUpdate = {
+  status?: ProcessingSession["status"];
+  processedMatches?: number;
+  matches?: MatchProgress[];
+};
 
 export class PrismaSessionStore {
-  async createSession(matches: any[]): Promise<any> {
+  async createSession(matches: MatchProgress[]): Promise<ProcessingSession> {
     const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
     const sessionData = {
@@ -11,7 +22,9 @@ export class PrismaSessionStore {
       status: "processing",
       totalMatches: matches.length,
       processedMatches: 0,
-      matches: matches,
+      // Prisma принимает Json-колонку как InputJsonValue; форму этих
+      // данных задаёт MatchProgress, читаются они обратно там же.
+      matches: matches as unknown as Prisma.InputJsonValue,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -37,12 +50,22 @@ export class PrismaSessionStore {
     }
   }
 
-  async updateSession(sessionId: string, updates: any): Promise<boolean> {
+  async updateSession(
+    sessionId: string,
+    updates: SessionUpdate
+  ): Promise<boolean> {
     try {
+      // matches отделяем от остальных полей: это Json-колонка, и Prisma
+      // ждёт для неё InputJsonValue, а не массив MatchProgress.
+      const { matches, ...rest } = updates;
+
       await prisma.processingSession.update({
         where: { sessionId },
         data: {
-          ...updates,
+          ...rest,
+          ...(matches
+            ? { matches: matches as unknown as Prisma.InputJsonValue }
+            : {}),
           updatedAt: new Date(),
         },
       });
@@ -56,14 +79,14 @@ export class PrismaSessionStore {
   async updateMatchProgress(
     sessionId: string,
     matchUrl: string,
-    updates: any
+    updates: Partial<MatchProgress>
   ): Promise<boolean> {
     try {
       const session = await this.getSession(sessionId);
       if (!session) return false;
 
       const matchIndex = session.matches.findIndex(
-        (m: any) => m.url === matchUrl
+        (m) => m.url === matchUrl
       );
       if (matchIndex === -1) return false;
 
@@ -76,16 +99,8 @@ export class PrismaSessionStore {
 
       // Пересчитываем общий прогресс
       const completedMatches = updatedMatches.filter(
-        (m: any) => m.status === "completed"
+        (m) => m.status === "completed"
       ).length;
-      const totalProgress =
-        session.totalMatches > 0
-          ? updatedMatches.reduce(
-              (sum: number, match: any) => sum + match.progress,
-              0
-            ) / session.totalMatches
-          : 0;
-
       // Сохраняем в БД
       await this.updateSession(sessionId, {
         matches: updatedMatches,
@@ -103,13 +118,17 @@ export class PrismaSessionStore {
     }
   }
 
-  private mapToProcessingSession(dbSession: any): any {
+  private mapToProcessingSession(
+    dbSession: ProcessingSessionRow
+  ): ProcessingSession {
     return {
       sessionId: dbSession.sessionId,
-      status: dbSession.status,
+      status: dbSession.status as ProcessingSession["status"],
       totalMatches: dbSession.totalMatches,
       processedMatches: dbSession.processedMatches,
-      matches: dbSession.matches,
+      // matches лежит в JSON-колонке: её форму гарантирует только этот
+      // сервис, он же её и записывает.
+      matches: (dbSession.matches ?? []) as unknown as MatchProgress[],
       createdAt: dbSession.createdAt,
       updatedAt: dbSession.updatedAt,
     };

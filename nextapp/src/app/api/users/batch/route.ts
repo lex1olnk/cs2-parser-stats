@@ -6,6 +6,15 @@ import {
   TeamResponseDto,
 } from "@/services/server/server-parse-services/dto/participant-response.dto";
 import { requireAdmin } from "@/lib/auth/guards";
+import { Prisma } from "@/../prisma/generated/client";
+
+/** Нарушение уникального индекса — код P2002 у Prisma. */
+function isUniqueViolation(error: unknown) {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2002"
+  );
+}
 
 export async function POST(request: NextRequest) {
   const guard = await requireAdmin();
@@ -90,9 +99,9 @@ async function findOrCreateProfiles(
         },
       });
       profileMap.set(name, newProfile.id);
-    } catch (error: any) {
+    } catch (error) {
       // Если произошла ошибка уникальности (параллельное создание)
-      if (error.code === "P2002") {
+      if (isUniqueViolation(error)) {
         const existingProfile = await prisma.profile.findUnique({
           where: { name },
         });
@@ -202,8 +211,8 @@ async function createTeamsAndParticipants(
             draftOrder: participant.draftOrder,
           });
         }
-      } catch (error: any) {
-        if (error.code === "P2002") {
+      } catch (error) {
+        if (isUniqueViolation(error)) {
           // Unique constraint violation - участник уже существует в этом турнире
           throw new Error(
             `Participant ${playerName} is already registered in this tournament`,

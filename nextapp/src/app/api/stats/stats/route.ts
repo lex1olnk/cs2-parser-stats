@@ -25,30 +25,38 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Первое убийство раунда — минимальный тик внутри round_id. Группировка
+    // по round_time была неверной: это время внутри раунда, а не его
+    // идентификатор, поэтому «первые» убийства собирались со всех раундов
+    // сразу и entry-статистика получалась завышенной.
     const entryRows: Array<{ fk: bigint | null; fd: bigint | null }> =
       await prisma.$queryRaw`
-         with cte as (
-              select *
+         with first_kills as (
+              select distinct on (mk.round_id)
+                     mk.killer_id
+                   , mk.victim_id
                 from match_kill mk
-               where exists (
-                     select 1
-                       from match m
-                      where mk.match_id = m.id 
-                        and m.tournament_id = ${tournamentId}::uuid
-                     )
+                join match m on m.id = mk.match_id
+               where m.tournament_id = ${tournamentId}::uuid
+                 and mk.is_teamkill = false
+               order by mk.round_id, mk.tick asc
               )
-       select sum(case when killer_id = ${playerId} then 1 end) as fk
-            , sum(case when victim_id = ${playerId} then 1 end) as fd
-         from cte
-        where (killer_id = ${playerId} or victim_id = ${playerId}) 
-          and (round_time, tick) in (
-               select round_time, min(tick) 
-                 from cte 
-                group by round_time
-              )
+       select count(*) filter (where killer_id = ${playerId}) as fk
+            , count(*) filter (where victim_id = ${playerId}) as fd
+         from first_kills
     `;
 
-    const playerStatsResult: any[] = await prisma.$queryRaw`
+    // Значения приходят из count/sum, то есть int8 -> bigint;
+    // у строки-разделителя 'empty' значение null.
+    type BasicStatRow = {
+      id: number;
+      title: string;
+      value: bigint | number | null;
+      ord: number;
+      visible: number;
+    };
+
+    const playerStatsResult: BasicStatRow[] = await prisma.$queryRaw`
               select 1         as id
                    , 'Matches' as title
                    , count(*)  as value
@@ -106,7 +114,9 @@ export async function GET(request: NextRequest) {
                order by ord
     `;
 
-    const detailedResult: any[] = await prisma.$queryRaw`
+    type DetailedStatRow = BasicStatRow & { card: number };
+
+    const detailedResult: DetailedStatRow[] = await prisma.$queryRaw`
               select 1            as id
                    , 1            as card
                    , 'Damage' as title

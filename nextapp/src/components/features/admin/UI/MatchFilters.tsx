@@ -67,10 +67,13 @@ export const MatchFilters: React.FC<MatchFiltersProps> = ({
           label="Сортировка"
           value={filters.sortBy}
           onChange={(value) => onFilterChange("sortBy", value)}
+          // Поля сортировки на сервере берутся из белого списка: createdAt,
+          // startedAt, finishedAt, status, type. Всё остальное молча
+          // заменяется там на createdAt, поэтому лишних вариантов здесь нет.
           options={[
-            { value: "startedAt_desc", label: "Дата (новые)" },
-            { value: "startedAt_asc", label: "Дата (старые)" },
-            { value: "tournamentId_asc", label: "Турнир (А-Я)" },
+            { value: "startedAt_desc", label: "Дата матча (новые)" },
+            { value: "startedAt_asc", label: "Дата матча (старые)" },
+            { value: "createdAt_desc", label: "Дата импорта (новые)" },
             { value: "status_asc", label: "Статус" },
           ]}
         />

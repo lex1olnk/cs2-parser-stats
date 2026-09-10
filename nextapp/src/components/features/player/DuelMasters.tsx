@@ -1,43 +1,82 @@
 "use client";
-import React, { useRef } from "react";
-import { motion, useInView } from "framer-motion";
+import React from "react";
+import { motion } from "framer-motion";
 
-export function DuelMasters() {
-  const ref = useRef(null);
-  const isInView = useInView(ref, { once: true, amount: 0.5 }); // Анимировать один раз, когда 50% элемента видно
+export type DuelStat = {
+  /** Ник соперника. */
+  nickname: string;
+  /** Доля выигранных дуэлей против него, 0..100. */
+  percent: number;
+  won: number;
+  lost: number;
+};
 
-  const masters = [
-    { label: "CAP", value: "54.2%", color: "text-red-500" },
-    { label: "01", value: "54.2%", color: "text-yellow-400" },
-    { label: "02", value: "54.2%", color: "text-green-400" },
-    { label: "03", value: "54.2%", color: "text-cyan-400" },
-    { label: "04", value: "54.2%", color: "text-blue-500" },
-  ];
+/**
+ * Частые соперники и счёт личных встреч.
+ *
+ * Цвет здесь означает результат, а не порядок: раньше ники раскрашивались
+ * радугой по индексу, и красный у первого читался как «плохо», хотя значил
+ * лишь «он первый в списке».
+ */
+export function DuelMasters({ duels }: { duels: DuelStat[] }) {
+  if (duels.length === 0) return null;
 
   return (
-    <section ref={ref} className="pt-20 border-t border-zinc-900">
-      <div className="flex justify-center gap-16">
-        {masters.map((m, i) => (
-          <motion.div
-            key={m.label}
-            className="text-center group"
-            initial={{ opacity: 0, y: 50 }}
-            animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 50 }}
-            transition={{ duration: 0.5, delay: i * 0.1 }}
-          >
-            <p
-              className={`text-xl font-black italic mb-2 tracking-tighter ${m.color} transition-transform group-hover:-translate-y-1`}
+    <section>
+      <div className="flex items-baseline gap-4 mb-5">
+        <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-[0.3em]">
+          Личные встречи
+        </h2>
+        <span className="font-mono text-[10px] text-zinc-700 uppercase tracking-widest">
+          {"// "}с кем чаще всего пересекались
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {duels.map((duel, i) => {
+          const total = duel.won + duel.lost;
+          const ahead = duel.won > duel.lost;
+          const even = duel.won === duel.lost;
+
+          return (
+            <motion.div
+              key={duel.nickname}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, delay: i * 0.05 }}
+              className="border border-zinc-900 bg-zinc-900/5 p-4"
             >
-              {m.label}
-            </p>
-            <p className="text-3xl font-black italic tracking-tighter text-white">
-              {m.value}
-            </p>
-            <p className="text-[10px] text-zinc-700 italic font-bold mt-1">
-              142 | 108
-            </p>
-          </motion.div>
-        ))}
+              <p
+                className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 truncate"
+                title={duel.nickname}
+              >
+                {duel.nickname}
+              </p>
+              <p
+                className={`mt-2 text-3xl font-black italic tracking-tighter tabular-nums ${
+                  even
+                    ? "text-zinc-300"
+                    : ahead
+                      ? "text-green-500"
+                      : "text-red-500"
+                }`}
+              >
+                {duel.percent.toFixed(0)}%
+              </p>
+
+              {/* Полоса делит счёт встреч: слева выигранные, справа нет. */}
+              <div className="mt-3 flex h-1.5 bg-zinc-900">
+                <div
+                  className={even ? "bg-zinc-500" : ahead ? "bg-green-500" : "bg-red-500"}
+                  style={{ width: `${total > 0 ? (duel.won / total) * 100 : 0}%` }}
+                />
+              </div>
+              <p className="mt-2 font-mono text-[10px] text-zinc-700 tabular-nums">
+                {duel.won}–{duel.lost}
+              </p>
+            </motion.div>
+          );
+        })}
       </div>
     </section>
   );

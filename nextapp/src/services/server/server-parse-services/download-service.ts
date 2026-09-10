@@ -11,6 +11,16 @@ export interface DownloadResult {
   demoPath?: string;
 }
 
+/** Данные о матче с платформы, которых нет в самой демке. */
+export interface MatchMeta {
+  startedAt: Date;
+  finishedAt: Date;
+  /** Раундов в основное время: 24 для MR12. */
+  maxRoundsCount: number | null;
+  bestOf: number | null;
+  hasWinner: boolean | null;
+}
+
 export class DownloadService {
   private readonly DEMOS_DIR = path.join(process.cwd(), "..", "shared-demos");
 
@@ -198,6 +208,66 @@ export class DownloadService {
       throw new Error("Invalid Fastcup URL format");
     }
     return match[1];
+  }
+
+  /**
+   * Время матча и формат — из карточки матча на платформе.
+   *
+   * В самой демке этой информации нет: в заголовке только карта, версия
+   * и имя сервера, даты там не бывает. Без этого `createMatch` подставлял
+   * `new Date()`, и матч в списке был датирован моментом импорта, а не игры
+   * (залитый матч показывался 16 декабря вместо 6-го).
+   *
+   * Возвращает null, если платформа неизвестна (локальный импорт) или
+   * запрос не удался — тогда вызывающий код остаётся на прежнем поведении.
+   */
+  async getMatchMeta(matchUrl: string): Promise<MatchMeta | null> {
+    if (!matchUrl.includes("fastcup.net")) return null;
+
+    try {
+      const matchId = this.extractFastcupMatchId(matchUrl);
+
+      const response = await fetch("https://hasura.fastcup.net/v1/graphql", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        },
+        body: JSON.stringify({
+          query: graphqlMatch,
+          variables: { matchId: parseInt(matchId), gameId: 3 },
+        }),
+      });
+
+      if (!response.ok) {
+        console.warn(`⚠️ Fastcup match meta: HTTP ${response.status}`);
+        return null;
+      }
+
+      const match = (await response.json())?.data?.match;
+      if (!match?.startedAt) return null;
+
+      const startedAt = new Date(match.startedAt);
+      const finishedAt = match.finishedAt
+        ? new Date(match.finishedAt)
+        : startedAt;
+
+      if (Number.isNaN(startedAt.getTime())) return null;
+
+      return {
+        startedAt,
+        finishedAt: Number.isNaN(finishedAt.getTime()) ? startedAt : finishedAt,
+        maxRoundsCount:
+          typeof match.maxRoundsCount === "number" ? match.maxRoundsCount : null,
+        bestOf: typeof match.bestOf === "number" ? match.bestOf : null,
+        hasWinner:
+          typeof match.hasWinner === "boolean" ? match.hasWinner : null,
+      };
+    } catch (error) {
+      console.warn(`⚠️ Fastcup match meta failed: ${error}`);
+      return null;
+    }
   }
 
   // Очистка временных файлов

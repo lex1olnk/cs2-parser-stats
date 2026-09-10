@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useStore } from "@/store";
-import type { MatchQueryParams } from "@/types/match";
+import type { MatchNew } from "@/types/match";
 import { deleteMatch } from "@/services/client";
 import {
   SessionItem,
@@ -13,23 +13,17 @@ import { LoadingState } from "@/components/features/admin/UI/LoadingState";
 import { ErrorState } from "@/components/features/admin/UI/ErrorState";
 import { EmptyState } from "@/components/features/admin/UI/EmptyState";
 
-interface Filters {
-  tournamentId: string | null;
-  status: string;
-  dateFrom: string;
-  sortBy: string;
+/**
+ * Сортировка в интерфейсе — одно поле вида «поле_направление», а роут ждёт
+ * их по отдельности. Значения совпадают с белым списком на сервере: поле
+ * не из него молча заменится там на createdAt.
+ */
+const DEFAULT_SORT = "startedAt_desc";
+
+function splitSort(value: string): { sortBy: string; sortOrder: "asc" | "desc" } {
+  const [sortBy, direction] = value.split("_");
+  return { sortBy, sortOrder: direction === "asc" ? "asc" : "desc" };
 }
-
-const INITIAL_FILTERS: Filters = {
-  tournamentId: null,
-  status: "",
-  dateFrom: "",
-  sortBy: "startedAt_desc",
-};
-
-const PAGINATION_CONFIG = {
-  take: 10,
-};
 
 export const MatchManagement: React.FC = () => {
   const setShowMatchForm = useStore((state) => state.setShowMatchForm);
@@ -40,23 +34,51 @@ export const MatchManagement: React.FC = () => {
   const loading = useStore((state) => state.loading);
   const error = useStore((state) => state.error);
   const setFilters = useStore((state) => state.setFilters);
+  const clearFilters = useStore((state) => state.clearFilters);
+  const filters = useStore((state) => state.filters);
+  const pagination = useStore((state) => state.pagination);
 
-  const [pagination, setPagination] = useState({
-    skip: 0,
-    take: PAGINATION_CONFIG.take,
-    total: 0,
-  });
+  // Отдельного состояния для фильтров и страницы нет намеренно: их держит
+  // стор, он же ходит в API. Две копии разъезжались бы при любом обновлении
+  // списка со стороны (импорт, авто-refresh).
+  const [sortValue, setSortValue] = useState(DEFAULT_SORT);
 
   const [activeSessions, setActiveSessions] = useState<ProcessingSession[]>([]);
-  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [, setSessionsLoading] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(Date.now());
 
-  // Загрузка данных
+  const loadAllSessions = useCallback(async () => {
+    try {
+      setSessionsLoading(true);
+      const response = await fetch("/api/matches/sessions");
+      if (response.ok) {
+        const newSessions = await response.json();
+        setActiveSessions((prev) =>
+          hasSessionsChanged(prev, newSessions) ? newSessions : prev,
+        );
+      }
+    } catch (err) {
+      console.error("Failed to load sessions:", err);
+    } finally {
+      setSessionsLoading(false);
+    }
+  }, []);
+
+  const loadMatches = useCallback(async () => {
+    try {
+      await fetchMatches({});
+    } catch (err) {
+      console.error("Failed to load matches:", err);
+    }
+  }, [fetchMatches]);
+
+  // Загрузка данных. Список подтягивает сам стор при смене фильтров,
+  // здесь — только первый заход.
   useEffect(() => {
     fetchTournaments();
     loadMatches();
     loadAllSessions();
-  }, [pagination.skip, pagination.take]);
+  }, [fetchTournaments, loadMatches, loadAllSessions]);
 
   // Обработка событий от AddMatchForm
   useEffect(() => {
@@ -65,8 +87,9 @@ export const MatchManagement: React.FC = () => {
         console.log("🔄 New sessions detected, refreshing...");
         setLastUpdate(Date.now());
 
-        const newSessionCount = event.data.sessions.filter(
-          (s: any) => s.status === "pending",
+        const sessions: Array<{ status: string }> = event.data.sessions ?? [];
+        const newSessionCount = sessions.filter(
+          (s) => s.status === "pending",
         ).length;
         if (newSessionCount > 0) {
           console.log(`Начата обработка ${newSessionCount} матчей`);
@@ -86,7 +109,7 @@ export const MatchManagement: React.FC = () => {
     const interval = setInterval(loadAllSessions, intervalTime);
 
     return () => clearInterval(interval);
-  }, [lastUpdate, activeSessions.length]);
+  }, [lastUpdate, activeSessions.length, loadAllSessions]);
 
   // Обновление при фокусе окна
   useEffect(() => {
@@ -97,41 +120,33 @@ export const MatchManagement: React.FC = () => {
 
     window.addEventListener("focus", handleFocus);
     return () => window.removeEventListener("focus", handleFocus);
-  }, []);
+  }, [loadAllSessions, loadMatches]);
 
-  const loadAllSessions = useCallback(async () => {
-    try {
-      setSessionsLoading(true);
-      const response = await fetch("/api/matches/sessions");
-      if (response.ok) {
-        const newSessions = await response.json();
-        setActiveSessions((prev) =>
-          hasSessionsChanged(prev, newSessions) ? newSessions : prev,
-        );
-      }
-    } catch (err) {
-      console.error("Failed to load sessions:", err);
-    } finally {
-      setSessionsLoading(false);
-    }
-  }, []);
-
-  const loadMatches = async () => {
-    try {
-      const params: MatchQueryParams = {
-        skip: pagination.skip,
-        take: pagination.take,
-        include: JSON.stringify({ tournament: true }),
-      };
-      await fetchMatches(params);
-    } catch (err) {
-      console.error("Failed to load matches:", err);
-    }
+  const handlePageChange = (page: number) => {
+    fetchMatches({ page });
   };
 
-  const handlePageChange = (newSkip: number) => {
-    setPagination((prev) => ({ ...prev, skip: newSkip }));
+  const handleFilterChange = (key: string, value: string) => {
+    if (key === "sortBy") {
+      setSortValue(value);
+      setFilters(splitSort(value));
+      return;
+    }
+    // Пустая строка означает «без ограничения», а не «поле равно пустому».
+    setFilters({ [key]: value || undefined });
   };
+
+  const handleClearFilters = () => {
+    setSortValue(DEFAULT_SORT);
+    clearFilters();
+  };
+
+  const hasActiveFilters = Boolean(
+    filters.tournamentId ||
+      filters.status ||
+      filters.dateFrom ||
+      sortValue !== DEFAULT_SORT,
+  );
 
   const handleDeleteMatch = async (matchId: string) => {
     try {
@@ -164,21 +179,25 @@ export const MatchManagement: React.FC = () => {
         getSessionStatusColor={getSessionStatusColor}
         getSessionStatusText={getSessionStatusText}
       />
-      {/*
       <MatchFilters
-        filters={filters}
+        filters={{
+          tournamentId: filters.tournamentId ?? "",
+          status: filters.status ?? "",
+          dateFrom: filters.dateFrom ?? "",
+          sortBy: sortValue,
+        }}
         tournaments={tournaments || []}
         onFilterChange={handleFilterChange}
-        onClearFilters={clearFilters}
+        onClearFilters={handleClearFilters}
       />
-      */}
+
       <ContentSection
         loading={loading}
         error={error}
         matches={matches}
-        //hasActiveFilters={hasActiveFilters}
+        hasActiveFilters={hasActiveFilters}
         onRetry={loadMatches}
-        //onClearFilters={clearFilters}
+        onClearFilters={handleClearFilters}
         pagination={pagination}
         onPageChange={handlePageChange}
         onDeleteMatch={handleDeleteMatch}
@@ -262,12 +281,12 @@ const ActiveSessions: React.FC<{
 const ContentSection: React.FC<{
   loading: boolean;
   error: string | null;
-  matches: any[] | null;
+  matches: MatchNew[] | null;
   hasActiveFilters?: boolean;
   onRetry: () => void;
   onClearFilters?: () => void;
-  pagination: { skip: number; take: number; total: number };
-  onPageChange: (skip: number) => void;
+  pagination: Pagination;
+  onPageChange: (page: number) => void;
   onDeleteMatch: (matchId: string) => void;
   getStatusColor: (status: string) => string;
   getStatusText: (status: string) => string;
@@ -286,7 +305,10 @@ const ContentSection: React.FC<{
 }) => {
   if (loading) return <LoadingState />;
   if (error && !matches) return <ErrorState error={error} onRetry={onRetry} />;
-  if (!matches || matches.length === 0) return <EmptyState />;
+  if (!matches || matches.length === 0)
+    return (
+      <EmptyState filtered={hasActiveFilters} onClearFilters={onClearFilters} />
+    );
 
   return (
     <div className="space-y-4">
@@ -307,56 +329,61 @@ const ContentSection: React.FC<{
   );
 };
 
+/** Пагинация в том виде, в каком её отдаёт сервер и держит стор. */
+type Pagination = {
+  currentPage: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
 const PaginationHeader: React.FC<{
-  pagination: { skip: number; take: number; total: number };
-  onPageChange: (skip: number) => void;
+  pagination: Pagination;
+  onPageChange: (page: number) => void;
 }> = ({ pagination, onPageChange }) => (
   <div className="flex justify-between items-center">
     <h3 className="text-lg font-semibold">
       Найдено матчей: {pagination.total}
     </h3>
-    {pagination.total > pagination.take && (
+    {pagination.totalPages > 1 && (
       <PaginationControls pagination={pagination} onPageChange={onPageChange} />
     )}
   </div>
 );
 
 const PaginationFooter: React.FC<{
-  pagination: { skip: number; take: number; total: number };
-  onPageChange: (skip: number) => void;
+  pagination: Pagination;
+  onPageChange: (page: number) => void;
 }> = ({ pagination, onPageChange }) =>
-  pagination.total > pagination.take && (
+  pagination.totalPages > 1 ? (
     <div className="flex justify-center">
       <PaginationControls pagination={pagination} onPageChange={onPageChange} />
     </div>
-  );
+  ) : null;
 
 const PaginationControls: React.FC<{
-  pagination: { skip: number; take: number; total: number };
-  onPageChange: (skip: number) => void;
+  pagination: Pagination;
+  onPageChange: (page: number) => void;
 }> = ({ pagination, onPageChange }) => {
-  const currentPage = Math.floor(pagination.skip / pagination.take) + 1;
-  const totalPages = Math.ceil(pagination.total / pagination.take);
+  const { currentPage, pageSize, total, totalPages } = pagination;
+  const first = (currentPage - 1) * pageSize + 1;
+  const last = Math.min(currentPage * pageSize, total);
 
   return (
     <div className="flex space-x-2">
       <button
-        onClick={() =>
-          onPageChange(Math.max(0, pagination.skip - pagination.take))
-        }
-        disabled={pagination.skip === 0}
+        onClick={() => onPageChange(currentPage - 1)}
+        disabled={currentPage <= 1}
         className="px-3 py-1 border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
       >
         Назад
       </button>
       <span className="px-3 py-1 text-sm text-gray-600">
-        {pagination.skip + 1}-
-        {Math.min(pagination.skip + pagination.take, pagination.total)} из{" "}
-        {pagination.total}
+        {first}-{last} из {total}
       </span>
       <button
-        onClick={() => onPageChange(pagination.skip + pagination.take)}
-        disabled={pagination.skip + pagination.take >= pagination.total}
+        onClick={() => onPageChange(currentPage + 1)}
+        disabled={currentPage >= totalPages}
         className="px-3 py-1 border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
       >
         Вперед
@@ -382,19 +409,6 @@ const hasSessionsChanged = (
     );
   });
 };
-
-const getOrderBy = (sortBy: string) => {
-  const [field, direction] = sortBy.split("_");
-  return JSON.stringify({ [field]: direction });
-};
-
-const buildWhereClause = (filters: Filters) => ({
-  ...(filters.tournamentId && { tournamentId: filters.tournamentId }),
-  ...(filters.status && { status: filters.status }),
-  ...(filters.dateFrom && {
-    startedAt: { gte: new Date(filters.dateFrom).toISOString() },
-  }),
-});
 
 const getStatusText = (status: string) => {
   const statusMap: { [key: string]: string } = {

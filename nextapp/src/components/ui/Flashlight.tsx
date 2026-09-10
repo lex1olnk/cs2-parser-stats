@@ -1,6 +1,6 @@
 // components/ui/Flashlight.tsx
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { motion, useSpring, useMotionValue } from "framer-motion";
 
 export const Flashlight = () => {

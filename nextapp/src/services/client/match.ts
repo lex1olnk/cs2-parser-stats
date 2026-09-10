@@ -1,5 +1,18 @@
-import { platform } from "os";
 import { api } from "./api";
+
+/** Матч в том виде, в каком его показывает админка. */
+export type AdminMatch = {
+  id: string;
+  url: string;
+  tournamentId?: string;
+  bestOf: number;
+  isFinal: boolean;
+  status: string;
+  startedAt: string;
+  updatedAt: string;
+  text: string;
+  teams: never[];
+};
 import type {
   AdminMatchesResponse,
   MatchInput,
@@ -31,7 +44,7 @@ export const getMatches = async (
 ): Promise<AdminMatchesResponse> => {
   // Очищаем параметры от undefined значений
   const cleanParams = Object.fromEntries(
-    Object.entries(params).filter(([_, value]) => value !== undefined)
+    Object.entries(params).filter(([, value]) => value !== undefined)
   );
 
   const response = await api.get<AdminMatchesResponse>("/matches", {
@@ -42,7 +55,7 @@ export const getMatches = async (
 };
 
 // Получение матча по ID
-export const getMatchById = async (id: string): Promise<any> => {
+export const getMatchById = async (id: string): Promise<AdminMatch> => {
   const response = await api.get<MatchNew>(`/matches/${id}`);
 
   return {
@@ -63,7 +76,7 @@ export const getMatchById = async (id: string): Promise<any> => {
 export const updateMatch = async (
   id: string,
   updates: Partial<MatchInput>
-): Promise<any> => {
+): Promise<AdminMatch> => {
   const response = await api.put<MatchNew>(`/matches/${id}`, updates);
 
   return {

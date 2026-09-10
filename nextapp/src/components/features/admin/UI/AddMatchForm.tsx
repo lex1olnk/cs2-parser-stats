@@ -69,17 +69,9 @@ const AddMatchForm: React.FC = () => {
     }
   }, [matchText, tournamentId]);
 
-  // Дополнительный эффект для обновления tournamentId в уже распарсенных матчах
-  useEffect(() => {
-    if (parsedMatches.length > 0 && tournamentId) {
-      setParsedMatches((prev) =>
-        prev.map((match) => ({
-          ...match,
-          tournamentId: tournamentId,
-        }))
-      );
-    }
-  }, [tournamentId]);
+  // Отдельного эффекта на смену турнира здесь нет намеренно: разбор выше
+  // и так перезапускается при изменении tournamentId и подставляет его
+  // в каждый матч. Прежний дубль лишь заново пересобирал тот же список.
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

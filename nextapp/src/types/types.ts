@@ -135,10 +135,6 @@ export interface PaginationParams {
   skip: number;
 }
 
-export interface Params extends PaginationParams {
-  include: any;
-}
-
 // types/profile.ts
 export interface ProfileQueryParams {
   // Пагинация

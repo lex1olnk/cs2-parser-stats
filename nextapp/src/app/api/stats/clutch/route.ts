@@ -18,7 +18,10 @@ export async function GET(request: NextRequest) {
     // Добавляем задержку для тестирования Suspense
     //await new Promise((resolve) => setTimeout(resolve, 2000));
 
-    const result: any[] = await prisma.$queryRaw`
+    // COUNT в Postgres — int8, Prisma отдаёт его как bigint.
+    type ClutchRow = { amount: number; success: boolean; count: bigint };
+
+    const result: ClutchRow[] = await prisma.$queryRaw`
       SELECT amount
            , success
            , COUNT(*) as count

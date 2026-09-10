@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@/../prisma/generated/client";
 import { writeFileSync } from "node:fs";
 import { graphqlMatch } from "./query";
 import { MatchInput } from "@/types/demo-processing";
@@ -20,9 +21,14 @@ interface FindAllParams {
   where?: { tournamentId?: string; status?: string; type?: string };
   skip?: number;
   take?: number;
-  orderBy?: any;
-  include?: any;
+  orderBy?: Prisma.MatchOrderByWithRelationInput;
+  include?: Prisma.MatchInclude;
 }
+/** Текст ошибки, не полагаясь на то, что брошено именно Error. */
+function describeError(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export class MatchesService {
   async findAll(params: FindAllParams = {}) {
     const { where, skip, take, orderBy, include } = params;
@@ -52,16 +58,16 @@ export class MatchesService {
     try {
       const matches = await prisma.match.findMany(query);
       return matches;
-    } catch (error: any) {
-      throw new Error(`Failed to fetch matches: ${error.message}`);
+    } catch (error) {
+      throw new Error(`Failed to fetch matches: ${describeError(error)}`);
     }
   }
 
-  async count(where?: any) {
+  async count(args?: Prisma.MatchCountArgs) {
     try {
-      return await prisma.match.count(where);
-    } catch (error: any) {
-      throw new Error(`Failed to count matches: ${error.message}`);
+      return await prisma.match.count(args);
+    } catch (error) {
+      throw new Error(`Failed to count matches: ${describeError(error)}`);
     }
   }
 

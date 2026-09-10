@@ -68,11 +68,10 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: false,
   },
-  // ESLint пока вне сборки: в коде ~130 накопленных замечаний
-  // (в основном any в парсере и неиспользуемые импорты). Разгребается
-  // отдельно, см. plan.md; проверять руками — npm run lint.
+  // ESLint в сборке: накопленных замечаний было ~130, теперь ноль,
+  // и пусть сборка падает, если они снова появятся.
   eslint: {
-    ignoreDuringBuilds: true,
+    ignoreDuringBuilds: false,
   },
   /* config options here */
 };

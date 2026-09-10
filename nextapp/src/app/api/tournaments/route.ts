@@ -9,7 +9,7 @@ export async function GET() {
   try {
     const matches = await tournamentsService.findAll();
     return NextResponse.json(matches);
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: "Failed to fetch matches" },
       { status: 500 },

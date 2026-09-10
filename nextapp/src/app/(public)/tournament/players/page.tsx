@@ -1,92 +1,87 @@
 import { PlayerLeaderboard } from "@/components/features/player/PlayerLeaderboard";
 import { prisma } from "@/lib/prisma";
+import { MIN_RANKED_ROUNDS, ratingComponents } from "@/lib/rating";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+type LeaderboardRow = {
+  id: number;
+  nickname: string;
+  team: string;
+  rounds: number;
+  kills: number;
+  deaths: number;
+  assists: number;
+  damage: number;
+  kast_rounds: number;
+  hs_kills: number;
+};
+
 async function getTopPlayers(tournamentId: string) {
   if (!UUID_REGEX.test(tournamentId)) return [];
 
-  // HLTV Rating 1.0:
-  //   0.3591*(kills/R) + 0.4778*(survived/R) + 0.3658*(multi_kill/R)
-  //   - 0.394*(deaths/R) + 0.2778
-  // где R — суммарное число сыгранных раундов по матчам турнира.
-  const rows: any[] = await prisma.$queryRaw`
+  const rows: LeaderboardRow[] = await prisma.$queryRaw`
+    WITH agg AS (
+      SELECT player_id,
+             SUM(rounds)::int      AS rounds,
+             SUM(kills)::int       AS kills,
+             SUM(deaths)::int      AS deaths,
+             SUM(assists)::int     AS assists,
+             SUM(damage)::int      AS damage,
+             SUM(kast_rounds)::int AS kast_rounds,
+             SUM(hs_kills)::int    AS hs_kills
+      FROM player_rating2_components_per_match
+      WHERE tournament_id = ${tournamentId}::uuid
+      GROUP BY player_id
+      -- Иначе первым в топе окажется тот, кто сыграл два раунда и сделал
+      -- три убийства: на такой выборке любая метрика за раунд взлетает.
+      HAVING SUM(rounds) >= ${MIN_RANKED_ROUNDS}
+    )
     SELECT
       u.id,
       u.nickname,
       COALESCE(tt.name, '—') AS team,
-      COALESCE(c.kills,             0)::int AS kills,
-      COALESCE(c.deaths,            0)::int AS deaths,
-      COALESCE(c.multi_kill_rounds, 0)::int AS multi_kill_rounds,
-      COALESCE(c.survived_rounds,   0)::int AS survived_rounds,
-      COALESCE(c.total_rounds,      1)::int AS rounds,
-      COALESCE(k.hs_kills,          0)::int AS hs_kills,
-      COALESCE(d.damage,            0)::int AS damage
-    FROM (
-      SELECT
-        player_id,
-        SUM(kills)             AS kills,
-        SUM(deaths)            AS deaths,
-        SUM(multi_kill_rounds) AS multi_kill_rounds,
-        SUM(survived_rounds)   AS survived_rounds,
-        SUM(total_rounds)      AS total_rounds
-      FROM player_rating_components_per_match
-      WHERE tournament_id = ${tournamentId}::uuid
-      GROUP BY player_id
-    ) c
-    JOIN "user" u ON u.id = c.player_id
-    LEFT JOIN (
-      SELECT player_id, SUM(hs_kills) AS hs_kills
-      FROM kill_stats_per_match
-      WHERE tournament_id = ${tournamentId}::uuid
-      GROUP BY player_id
-    ) k ON k.player_id = c.player_id
-    LEFT JOIN (
-      SELECT player_id, SUM(damage) AS damage
-      FROM damage_stats_per_match
-      WHERE tournament_id = ${tournamentId}::uuid
-      GROUP BY player_id
-    ) d ON d.player_id = c.player_id
+      a.rounds, a.kills, a.deaths, a.assists, a.damage, a.kast_rounds, a.hs_kills
+    FROM agg a
+    JOIN "user" u ON u.id = a.player_id
     LEFT JOIN profile p ON p.id = u.profile_id
     LEFT JOIN tournament_participant tp
            ON tp.profile_id = p.id
           AND tp.tournament_id = ${tournamentId}::uuid
     LEFT JOIN tournament_team tt ON tt.id = tp.tournament_team_id
     ORDER BY
-      0.3591 * (c.kills::float             / GREATEST(c.total_rounds, 1))
-    + 0.4778 * (c.survived_rounds::float   / GREATEST(c.total_rounds, 1))
-    + 0.3658 * (c.multi_kill_rounds::float / GREATEST(c.total_rounds, 1))
-    - 0.394  * (c.deaths::float            / GREATEST(c.total_rounds, 1))
-    + 0.2778 DESC
+        0.0073 * (a.kast_rounds::float / GREATEST(a.rounds, 1) * 100)
+      + 0.3591 * (a.kills::float   / GREATEST(a.rounds, 1))
+      - 0.5329 * (a.deaths::float  / GREATEST(a.rounds, 1))
+      + 0.2372 * (2.13 * (a.kills::float   / GREATEST(a.rounds, 1))
+                + 0.42 * (a.assists::float / GREATEST(a.rounds, 1)) - 0.41)
+      + 0.0032 * (a.damage::float  / GREATEST(a.rounds, 1))
+      + 0.1587 DESC
     LIMIT 15
   `;
 
   return rows.map((row) => {
-    const kills = Number(row.kills);
-    const deaths = Number(row.deaths);
-    const rounds = Number(row.rounds);
-    const damage = Number(row.damage);
-    const hsKills = Number(row.hs_kills);
-    const multiKill = Number(row.multi_kill_rounds);
-    const survived = Number(row.survived_rounds);
-
-    const rating =
-      rounds > 0
-        ? 0.3591 * (kills / rounds) +
-          0.4778 * (survived / rounds) +
-          0.3658 * (multiKill / rounds) -
-          0.394 * (deaths / rounds) +
-          0.2778
-        : 0;
+    const totals = {
+      kills: Number(row.kills),
+      deaths: Number(row.deaths),
+      assists: Number(row.assists),
+      damage: Number(row.damage),
+      kastRounds: Number(row.kast_rounds),
+      rounds: Number(row.rounds),
+    };
+    const { adr, rating } = ratingComponents(totals);
 
     return {
       id: Number(row.id),
-      nickname: row.nickname as string,
-      team: row.team as string,
-      kills,
-      adr: rounds > 0 ? damage / rounds : 0,
-      hs: kills > 0 ? Math.round((hsKills / kills) * 100) : 0,
+      nickname: row.nickname,
+      team: row.team,
+      kills: totals.kills,
+      adr,
+      hs:
+        totals.kills > 0
+          ? Math.round((Number(row.hs_kills) / totals.kills) * 100)
+          : 0,
       rating,
     };
   });
@@ -153,9 +148,11 @@ export default async function PlayersTopPage({
 
             <div className="p-6 border border-zinc-900 bg-zinc-900/10">
               <p className="text-[9px] leading-relaxed text-zinc-500 font-mono italic">
-                Rating = HLTV 1.0: 0.359·KPR + 0.478·SPR + 0.366·RMK − 0.394·DPR + 0.278.
-                KPR/DPR/SPR — kills/deaths/survived за раунд, RMK — доля раундов с
-                2+ убийствами. ADR = урон за раунд. HS% = % убийств в голову.
+                Rating = HLTV 2.0, тот же, что показывает FACEIT:
+                0.0073·KAST + 0.359·KPR − 0.533·DPR + 0.237·Impact + 0.0032·ADR
+                + 0.159, где Impact = 2.13·KPR + 0.42·APR − 0.41. KPR/DPR/APR —
+                убийства, смерти и ассисты за раунд, ADR — урон за раунд,
+                KAST — % раундов с убийством, ассистом, выживанием или разменом.
               </p>
             </div>
           </aside>

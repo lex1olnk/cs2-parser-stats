@@ -41,7 +41,7 @@ export const Draft = () => {
       <div className="absolute top-0 left-0 w-full z-30 bg-[#0a0a0a]">
         <div className="px-12 pt-12 pb-6">
           <p className="text-[10px] tracking-[0.4em] text-white/40 mb-2 uppercase">
-            // Logic: Draft_Sequence_v4
+            {"// Logic: Draft_Sequence_v4"}
           </p>
           <div className="flex justify-between items-end border-b border-zinc-800 pb-6">
             <h2 className="text-6xl font-black tracking-tighter uppercase">

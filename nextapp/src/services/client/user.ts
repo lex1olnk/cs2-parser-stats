@@ -1,4 +1,4 @@
-import type { PaginationParams, Profile, ProfilesResponse } from "@/types";
+import type { ProfilesResponse } from "@/types";
 import { api } from "./api";
 
 // Получение профилей с пагинацией

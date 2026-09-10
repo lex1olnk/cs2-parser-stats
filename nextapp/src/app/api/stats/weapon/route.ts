@@ -15,7 +15,18 @@ export async function GET(request: NextRequest) {
     const playerId = Number(searchParams.get("playerId"));
     const tournamentId = searchParams.get("tournamentId");
 
-    const result: any[] = await prisma.$queryRaw`
+    // count/sum по int в Postgres дают int8, Prisma отдаёт bigint.
+    type WeaponRow = {
+      weapon: string;
+      player_id: number;
+      total_kills: bigint;
+      wallbang: bigint;
+      headshot: bigint;
+      airshot: bigint;
+      noscope: bigint | null;
+    };
+
+    const result: WeaponRow[] = await prisma.$queryRaw`
        SELECT w.internal_name as weapon
             , mk.killer_id    as player_id
             , COUNT(*)        as total_kills
@@ -48,6 +59,11 @@ export async function GET(request: NextRequest) {
       })),
     });
   } catch (e) {
-    return NextResponse.json({ error: e });
+    // Наружу текст ошибки не отдаём — как и в остальных роутах статистики.
+    console.error("Weapon stats error:", e);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
   }
 }

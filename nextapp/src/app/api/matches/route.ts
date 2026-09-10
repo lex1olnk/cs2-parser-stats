@@ -6,6 +6,7 @@ import { refreshStatsViews } from "@/services/server/server-parse-services/stats
 import { waitForParseCallback } from "@/services/server/server-parse-services/demo-ingest-service";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth/guards";
+import type { MatchInput } from "@/types/demo-processing";
 import {
   checkRateLimit,
   isPipelineBusy,
@@ -35,7 +36,14 @@ function parseOrderBy(sortBy: string | null, sortOrder: string | null) {
   return { [field]: direction };
 }
 
-function filterValidMatches(matches: any[]) {
+/** Результат создания сессии на один матч. */
+type MatchQueueEntry = {
+  matchUrl: string;
+  sessionId: string;
+  status: string;
+};
+
+function filterValidMatches(matches: MatchInput[]) {
   return matches.filter((match) => {
     if (!match.url) return false;
 
@@ -72,10 +80,15 @@ export async function GET(request: Request) {
     const tournamentId = searchParams.get("tournamentId");
     const status = searchParams.get("status");
     const type = searchParams.get("type");
+    const dateFrom = searchParams.get("dateFrom");
 
-    // Параметры пагинации
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "20");
+    // Параметры пагинации. Числа приходят из query, поэтому мусор вроде
+    // ?page=abc не должен превращаться в NaN и уносить skip в NaN за ним.
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1);
+    const limit = Math.min(
+      100,
+      Math.max(1, parseInt(searchParams.get("limit") || "20", 10) || 20),
+    );
     const skip = (page - 1) * limit;
 
     // Параметры сортировки
@@ -89,6 +102,7 @@ export async function GET(request: Request) {
       tournamentId?: string;
       status?: string;
       type?: string;
+      startedAt?: { gte: Date };
     } = {};
 
     if (tournamentId) {
@@ -101,6 +115,15 @@ export async function GET(request: Request) {
 
     if (type) {
       where.type = type;
+    }
+
+    // Дата приходит из поля ввода как YYYY-MM-DD. Неразобранную дату молча
+    // пропускаем: пустой список из-за опечатки хуже, чем нефильтрованный.
+    if (dateFrom) {
+      const from = new Date(dateFrom);
+      if (!Number.isNaN(from.getTime())) {
+        where.startedAt = { gte: from };
+      }
     }
 
     // Получаем данные с пагинацией
@@ -140,6 +163,7 @@ export async function GET(request: Request) {
         tournamentId,
         status,
         type,
+        dateFrom,
       },
     });
   } catch (error) {
@@ -187,11 +211,7 @@ export async function POST(request: NextRequest) {
     // Валидация и фильтрация матчей
     const validMatches = filterValidMatches(body.matches);
 
-    const results: Array<{
-      matchUrl: string;
-      sessionId: string;
-      status: string;
-    }> = [];
+    const results: MatchQueueEntry[] = [];
 
     // Создаем сессии для каждого матча
     for (const match of validMatches) {
@@ -261,7 +281,10 @@ export async function POST(request: NextRequest) {
 }
 
 // Последовательная обработка матчей
-async function processMatchesSequentially(results: any[], validMatches: any[]) {
+async function processMatchesSequentially(
+  results: MatchQueueEntry[],
+  validMatches: MatchInput[]
+) {
   const processingMatches = results.filter((r) => r.status === "pending");
 
   console.log(
@@ -303,25 +326,29 @@ async function processMatchesSequentially(results: any[], validMatches: any[]) {
 }
 
 // Функция обработки одного матча
-async function processSingleMatch(sessionId: string, match: any) {
+async function processSingleMatch(sessionId: string, match: MatchInput) {
   let demoPath: string | undefined;
 
   try {
     console.log(`🔵 Starting match processing: ${match.url}`);
 
-    // Обновляем статус - начало обработки
-    await prismaSessionStore.updateMatchProgress(sessionId, match.url, {
-      status: "processing",
-      progress: 10,
-      currentStep: "Starting download",
-    });
-
-    // 1. Скачиваем демо
+    // 1. Скачиваем демо.
+    // Раньше здесь был ещё один апдейт со статусом "processing" — такого
+    // статуса у матча нет (есть pending/downloading/parsing/completed/error),
+    // и он всё равно затирался следующей строкой без единой операции между.
     await prismaSessionStore.updateMatchProgress(sessionId, match.url, {
       status: "downloading",
       progress: 30,
       currentStep: "Downloading demo file",
     });
+
+    // Импорт из папки идёт своим роутом и до сюда не доходит:
+    // filterValidMatches пропускает только ссылки fastcup и cybershoke.
+    if (match.platform === "local") {
+      throw new Error(
+        "Local demos are imported through /api/matches/local, not this pipeline"
+      );
+    }
 
     const downloadResult = await downloadService.downloadDemo(
       sessionId,

@@ -88,7 +88,8 @@ export const VerticalMatchSection = () => {
 
                   <div className="flex flex-col">
                     <span className="text-[9px] text-zinc-600 group-hover:text-black/50 mb-1">
-                      ID: 0x{match.id.slice(0, 6).toUpperCase()} // {date}{" "}
+                      ID: 0x{match.id.slice(0, 6).toUpperCase()}{" // "}
+                      {date}{" "}
                       {time}
                     </span>
                     <span className="text-xl font-bold uppercase italic tracking-tight transition-transform group-hover:translate-x-2 font-sans">

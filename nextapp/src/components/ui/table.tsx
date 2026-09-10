@@ -1,11 +1,20 @@
 import * as React from "react";
 
+/**
+ * Склейка классов. Компоненты принимали className и молча его выбрасывали:
+ * при деструктуризации проп уходил из ...props, а в разметку подставлялись
+ * только базовые классы — задать оформление снаружи было нельзя.
+ */
+function cn(...classes: (string | undefined | false)[]) {
+  return classes.filter(Boolean).join(" ");
+}
+
 const Table = React.forwardRef<
   HTMLTableElement,
   React.HTMLAttributes<HTMLTableElement>
 >(({ className, ...props }, ref) => (
   <div className="relative w-full overflow-auto">
-    <table ref={ref} className={"w-full caption-bottom text-sm"} {...props} />
+    <table ref={ref} className={cn("w-full caption-bottom text-sm", className)} {...props} />
   </div>
 ));
 Table.displayName = "Table";
@@ -14,7 +23,7 @@ const TableHeader = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
 >(({ className, ...props }, ref) => (
-  <thead ref={ref} className={"[&_tr]:border-b"} {...props} />
+  <thead ref={ref} className={cn("[&_tr]:border-b", className)} {...props} />
 ));
 TableHeader.displayName = "TableHeader";
 
@@ -22,7 +31,7 @@ const TableBody = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
 >(({ className, ...props }, ref) => (
-  <tbody ref={ref} className={"[&_tr:last-child]:border-0"} {...props} />
+  <tbody ref={ref} className={cn("[&_tr:last-child]:border-0", className)} {...props} />
 ));
 TableBody.displayName = "TableBody";
 
@@ -32,7 +41,7 @@ const TableFooter = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <tfoot
     ref={ref}
-    className={"border-t bg-muted/50 font-medium [&>tr]:last:border-b-0"}
+    className={cn("border-t bg-muted/50 font-medium [&>tr]:last:border-b-0", className)}
     {...props}
   />
 ));
@@ -45,7 +54,7 @@ const TableRow = React.forwardRef<
   <tr
     ref={ref}
     className={
-      "border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted"
+      cn("border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted", className)
     }
     {...props}
   />
@@ -59,7 +68,7 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={
-      "h-10 px-2 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]"
+      cn("h-10 px-2 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]", className)
     }
     {...props}
   />
@@ -73,7 +82,7 @@ const TableCell = React.forwardRef<
   <td
     ref={ref}
     className={
-      "p-2 align-middle [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]"
+      cn("p-2 align-middle [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]", className)
     }
     {...props}
   />
@@ -86,7 +95,7 @@ const TableCaption = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <caption
     ref={ref}
-    className={"mt-4 text-sm text-muted-foreground"}
+    className={cn("mt-4 text-sm text-muted-foreground", className)}
     {...props}
   />
 ));
